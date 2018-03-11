@@ -21,7 +21,7 @@ STORE_FAILURE_MSG = "Store Failed."
 RETRIEVE_SUCCESS_MSG = "Successfully Retrieved!"
 RETRIEVE_FAILURE_MSG = "Retrieve Failed."
 EMPTY_ENTRY = ""
-WINDOW_SIZE = '800x600'
+WINDOW_SIZE = '800x400'
 STATUS_TIMEOUT = 4000
 
 
@@ -38,10 +38,18 @@ class Client:
     def __create_title(self):
         self.__master.title(GUI_TITLE + " " + VERSION_TITLE)
         title_frame = tk.Frame(self.__master)
-        title = tk.Label(title_frame)
-        title.config(text=GUI_TITLE, font=('Verdana', 25))
+        title_image = tk.PhotoImage(file="Title.png")
+        title = tk.Label(title_frame, image=title_image)
+        title.image = title_image  # Required for displaying the image.
+
         title.pack()
         title_frame.pack()
+
+    def __create_sub_title(self):
+        sub_title_frame = tk.Frame(self.__master)
+        tk.Label(sub_title_frame, height=2).pack()
+        tk.Label(sub_title_frame, text="Please select action...", font=('Verdana', 15), height=2).pack()
+        sub_title_frame.pack()
 
     def __create_status_bar(self):
         self.__status.config(bd=1, relief=tk.SUNKEN, anchor=tk.W)
@@ -50,7 +58,7 @@ class Client:
     def __status_change(self, status_message, bad=False):
         color = 'red' if bad else 'green'
         self.__status.config(text=status_message, fg=color)
-        self.__status.after(STATUS_TIMEOUT, self.reset_status)
+        self.__status.after(STATUS_TIMEOUT, self.__reset_status)
 
     def __store(self):
         store_window = tk.Toplevel()
@@ -145,21 +153,31 @@ class Client:
 
         print(self.__transactions)
 
-    def reset_status(self):
+    def __reset_status(self):
         self.__status.config(text=DEFAULT_STATUS, fg='black')
 
     def __create_buttons(self):
-        store_button = tk.Button(self.__master)
-        store_button.config(text=STORE_TITLE, command=self.__store)
-        retrieve_button = tk.Button(self.__master)
-        retrieve_button.config(text=RETRIEVE_TITLE, command=self.__retrieve)
-        store_button.pack(side=tk.LEFT)
-        retrieve_button.pack(side=tk.RIGHT)
+        button_bar = tk.Frame(self.__master)
+        button_bar.pack(side=tk.TOP, fill=tk.X)
+        store_icon = tk.PhotoImage(file="Store.png").subsample(2, 2)
+        retrieve_icon = tk.PhotoImage(file="Retrieve.png").subsample(2, 2)
+
+        store_button = tk.Button(button_bar, command=self.__store)
+        store_button.config(image=store_icon)
+        store_button.image = store_icon
+
+        retrieve_button = tk.Button(button_bar, command=self.__retrieve)
+        retrieve_button.config(image=retrieve_icon)
+        retrieve_button.image = retrieve_icon
+
+        store_button.pack(side=tk.LEFT, padx=100, pady=15)
+        retrieve_button.pack(side=tk.RIGHT, padx=100, pady=15)
 
     def __create_window(self):
         self.__master.geometry(WINDOW_SIZE)
         self.__master.resizable(False, False)
         self.__create_title()
+        self.__create_sub_title()
         self.__create_status_bar()
         self.__create_buttons()
 
