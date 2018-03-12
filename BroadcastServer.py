@@ -1,0 +1,3 @@
+
+BROADCAST_HOST = 'localhost'
+BROADCAST_PORT = 5566
