@@ -25,6 +25,7 @@ class Server:
         self.__servers_out = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for _ in range(NUM_OF_SERVERS - 1)]
         self.__servers_in = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for _ in range(NUM_OF_SERVERS - 1)]
         self.__secrets = {}
+        self.__establish_servers_connection()
 
     def __get_id(self):
         return self.__id
@@ -33,15 +34,15 @@ class Server:
         data = self.__welcome.recv(BUFFER_SIZE)
         return data.split(DELIM)
 
-    def establish_servers_connection(self):
-        t1 = threading.Thread(target=self.connect_servers)
-        t2 = threading.Thread(target=self.accept_servers)
+    def __establish_servers_connection(self):
+        t1 = threading.Thread(target=self.__connect_servers)
+        t2 = threading.Thread(target=self.__accept_servers)
         t1.start()
         t2.start()
         t1.join()
         t2.join()
 
-    def accept_servers(self):
+    def __accept_servers(self):
         connections = 0
         while connections < NUM_OF_SERVERS-1:
             self.__welcome.listen(1)
@@ -49,7 +50,7 @@ class Server:
             self.__servers_in.append(conn)
             connections += 1
 
-    def connect_servers(self):
+    def __connect_servers(self):
         data = self.__welcome.recv(BUFFER_SIZE)
         addresses = data.split(DELIM)
         for i, sock in enumerate(self.__servers_out):
