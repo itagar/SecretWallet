@@ -1,32 +1,48 @@
 import socket
-import select
+import sys
+import threading
 
 NUM_OF_SERVERS = 4
+BUFFER_SIZE = 1024
+DELIM = ','
+DISCOVER_HOST = 'localhost'
+DISCOVER_PORT = 5555
 
 
 class Server:
 
-    __port = 5555
-    __num_of_servers = 0
-
     def __init__(self, port, discover_ip, discover_port):
-        self.__host = socket.gethostbyname(socket.gethostname())
-        self.__port = port
+        self.__discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__discover.connect((DISCOVER_HOST, DISCOVER_PORT))
+        sys.stderr.write('connected to discover server successfully.')
+        self.__id, broadcast_address = self.__parse_discover_data()
+        sys.stderr.write('server id is: ' + str(self.__id))
+        self.__broadcast.connect(broadcast_address)
+        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sys.stderr.write('server' + str(self.__id) + ' connected to broadcast server successfully.')
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__welcome.bind((self.__host, self.__port))
+        self.__welcome.bind(('localhost', port))
+        sys.stderr.write('server' + str(self.__id) + ' welcome socket established.')
         self.__servers_out = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for __ in range(NUM_OF_SERVERS - 1)]
         self.__servers_in = [socket.socket(socket.AF_INET, socket.SOCK_STREAM) for __ in range(NUM_OF_SERVERS - 1)]
-        self.__discover_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__discover_sock.connect((discover_ip, discover_port))
-        self.__id, self.__servers_addresses, broadcast_address = self.__parse_discover_data()
-        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__broadcast.connect(broadcast_address)
         self.__secrets = {}
 
-    def __parse_discover_data(self):
-        pass
+    def __get_id(self):
+        return self.__id
 
-    def accept_servers_connections(self):
+    def __parse_discover_data(self):
+        data = self.__welcome.recv(BUFFER_SIZE)
+        return data.split(DELIM)
+
+    def establish_servers_connection(self):
+        t1 = threading.Thread(target=self.connect_servers, args=(self,))
+        t2 = threading.Thread(target=self.accept_servers, args=(self,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+    def accept_servers(self):
         connections = 0
         while connections < NUM_OF_SERVERS:
             self.__welcome.listen(1)
@@ -34,9 +50,25 @@ class Server:
             self.__servers_in.append(conn)
             connections += 1
 
-    def connect_to_servers(self):
+    def connect_servers(self):
+        data = self.__welcome.recv(BUFFER_SIZE)
+        addresses = data.split(DELIM)
         for i, sock in enumerate(self.__servers_out):
-            sock.connect(self.__servers_addresses[i])
+            sock.connect(addresses[i])
 
     def accept_clients(self):
         pass
+
+    def close(self):
+        self.__welcome.close()
+        self.__discover.close()
+        self.__broadcast.close()
+        for sock in self.__servers_in:
+            sock.close()
+        for sock in self.__servers_out:
+            sock.close()
+
+
+if __name__ == '__main__':
+    welcome_port = int(input('please insert port number.'))
+    server = Server(welcome_port, DISCOVER_HOST, DISCOVER_PORT)
