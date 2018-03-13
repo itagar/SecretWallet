@@ -53,8 +53,19 @@ class DiscoverServer:
             cur_id = str(i + 1)
             print('server: ' + cur_id + ' was discovered successfully and connection was closed')
 
-    def connect_to_clients(self):
-        pass
+    def accept_clients(self):
+        print('ready to accept clients')
+        client_id = 1
+        while True:
+            self.__welcome.listen(4)  # todo magic
+            conn, address = self.__welcome.accept()
+            # send to client all data required to connect to the system
+            print('connected client: ', client_id)
+            data = str(client_id) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
+            conn.sendall(data.encode())
+            conn.close()
+            print('discovered client: ', client_id, ' successfully')
+            client_id += 1
 
     def close(self):
         self.__welcome.close()
@@ -62,4 +73,5 @@ class DiscoverServer:
 
 if __name__ == '__main__':
     discover_server = DiscoverServer()
+    discover_server.accept_clients()
     discover_server.close()

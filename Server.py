@@ -1,6 +1,6 @@
 import socket
-import sys
-import threading
+import random
+from threading import Thread, Lock
 
 NUM_OF_SERVERS = 4
 BUFFER_SIZE = 1024
@@ -8,6 +8,9 @@ DELIM_1 = ','
 DELIM_2 = '~'
 DISCOVER_IP = '127.0.0.1'
 DISCOVER_PORT = 5555
+END_SESSION = 0
+STORE = 1
+RETRIEVE = 2
 
 
 class Server:
@@ -43,8 +46,8 @@ class Server:
         return self.__id
 
     def __establish_servers_connection(self):
-        t1 = threading.Thread(target=self.__accept_servers)
-        t2 = threading.Thread(target=self.__connect_servers)
+        t1 = Thread(target=self.__accept_servers)
+        t2 = Thread(target=self.__connect_servers)
         t1.start()
         t2.start()
         t1.join()
@@ -71,19 +74,55 @@ class Server:
                 self.__servers_out[cur_id].sendall(self.__id.encode())
                 print('connected to server: ' + cur_id)
 
+    def __session(self, client_socket, client_id):
+        print('started session with client: ', client_id)
+
+        # while GUI is opened
+        while True:
+            data = client_socket.recv(BUFFER_SIZE).decode().split()
+            request = data[0]
+
+            if request == STORE:
+                name, key_req, value_req = data[1:]
+                self.__begin_store_session(client_socket, client_id, name, key_req, value_req)
+
+            elif request == RETRIEVE:
+                name, key_req = data[1:]
+                self.__begin_retrieve_session(client_socket, client_id, name, key_req)
+
+            else:  # end of session
+                break
+        print('session with client: ', client_id, ' closed successfully.')
+        client_socket.close()
+
     def accept_clients(self):
+        print('ready to accept clients')
+        while True:
+            self.__welcome.listen(4)  # todo magic
+            conn, address = self.__welcome.accept()
+            client_id = conn.recv(BUFFER_SIZE)
+            print('connected to client: ', client_id)
+            t = Thread(target=self.__session, args=(conn, client_id))
+            t.start()
+
+    def __begin_store_session(self, client_sock, client_id, name, key_share, value_share):
+        pass
+
+    def __begin_retrieve_session(self, client_sock, client_id, name, key_share):
         pass
 
     def close(self):
         self.__welcome.close()
         self.__discover.close()
         self.__broadcast.close()
-        for sock in self.__servers_in:
-            sock.close()
-        for sock in self.__servers_out:
-            sock.close()
+        for sid in self.__servers_in:
+            self.__servers_in[sid].close()
+        for sid in self.__servers_out:
+            self.__servers_out[sid].close()
 
 
 if __name__ == '__main__':
-    welcome_port = int(input('please insert port number:'))
+    welcome_port = random.randint(6000, 8000)  # todo change port assignment to discover
     server = Server(welcome_port, DISCOVER_IP, DISCOVER_PORT)
+    server.accept_clients()
+    server.close()
