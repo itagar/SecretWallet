@@ -11,33 +11,31 @@ class DiscoverServer:
               ' and port: ' + str(DISCOVER_PORT))
         print('waiting for broadcast server to connect')
         self.__welcome.listen(1)
-        broadcast_socket, self.__broadcast_address = self.__welcome.accept()
-        broadcast_host, broadcast_port = self.__broadcast_address[0][0], str(self.__broadcast_address[0][1])
+        broadcast_socket, broadcast_address = self.__welcome.accept()
+        self.__broadcast_packet = broadcast_address[0][0] + DELIM + str(broadcast_address[0][1])
         print('connected successfully to broadcast server')
         broadcast_socket.close()
         print('broadcast discovered successfully and connection was closed')
 
-        self.__servers_addresses = []
         servers = []
         connections = 0
+        self.__servers_packet = ''
 
-        while connections < NUM_OF_SERVERS:
+        while connections < NUM_OF_SERVERS:  # connect to servers
             self.__welcome.listen(4)
             conn, address = self.__welcome.accept()
             cur_id = str(connections + 1)
-            conn.sendall((cur_id + DELIM + broadcast_host + DELIM + broadcast_port).encode())
+            conn.sendall((cur_id + DELIM + self.__broadcast_packet).encode())
             connections += 1
             servers.append(conn)
-            self.__servers_addresses.append(address)
             print('connected successfully to server:' + cur_id + ' in ip: ' + address[0] +
                   ' and port number: ' + str(address[1]))
+            self.__servers_packet += cur_id + DELIM + address[0] + DELIM + str(address[1]) + DELIM
 
-        for i, sock in enumerate(servers):
-            cur_host = self.__servers_addresses[i][0]
-            cur_port = str(self.__servers_addresses[i][1])
-            cur_id = str(i + 1)
-            sock.sendall((cur_id + DELIM + cur_host + DELIM + cur_port).encode())
+        for i, sock in enumerate(servers):  # send servers information about other servers
+            sock.sendall(self.__servers_packet).encode()
             sock.close()
+            cur_id = str(i + 1)
             print('server: ' + cur_id + ' was discovered successfully and connection was closed')
 
     def connect_to_clients(self):
