@@ -29,8 +29,8 @@ class DiscoverServer:
             connections += 1
             servers.append(conn)
             self.__servers_addresses.append(address)
-            print('connected successfully to server:' + cur_id + ' in ip: '
-                             + address[0] + ' and port number: ' + str(address[1]))
+            print('connected successfully to server:' + cur_id + ' in ip: ' + address[0] +
+                  ' and port number: ' + str(address[1]))
 
         for i, sock in enumerate(servers):
             cur_host = self.__servers_addresses[i][0]

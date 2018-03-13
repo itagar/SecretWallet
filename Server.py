@@ -18,8 +18,8 @@ class Server:
         print(data)
         self.__id, broadcast_address = data.split(DELIM)
         print('server id is: ' + str(self.__id))
-        self.__broadcast.connect(broadcast_address)
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__broadcast.connect(broadcast_address)
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', port))
@@ -28,6 +28,7 @@ class Server:
         self.__servers_in = {}
         self.__secrets = {}
         self.__establish_servers_connection()
+        self.__discover.close()
 
     def get_id(self):
         return self.__id
@@ -39,7 +40,6 @@ class Server:
         t2.start()
         t1.join()
         t2.join()
-        self.__discover.close()
 
     def __accept_servers(self):
         connections = 0
