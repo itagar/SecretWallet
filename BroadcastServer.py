@@ -1,6 +1,6 @@
 import socket
 import sys
-from Server import NUM_OF_SERVERS, BUFFER_SIZE, DISCOVER_PORT
+from Server import NUM_OF_SERVERS, BUFFER_SIZE, DISCOVER_IP, DISCOVER_PORT, DELIM_1
 
 BROADCAST_HOST = 'localhost'
 BROADCAST_PORT = 5566
@@ -12,6 +12,7 @@ class BroadcastServer:
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((discover_ip, discover_port))
         print('connected to discover server successfully.')
+        discover.sendall((socket.gethostbyname(BROADCAST_HOST) + DELIM_1 + str(BROADCAST_PORT)).encode())
         discover.close()
         print('discovered successfully and closed connection.')
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -23,7 +24,7 @@ class BroadcastServer:
         for i in range(NUM_OF_SERVERS):
             self.__welcome.listen(NUM_OF_SERVERS)
             conn, address = self.__welcome.accept()
-            print('connected successfully to: ' + address)
+            print('connected successfully to: ' + str(address))
             self.__servers.append(conn)
 
     def close(self):
@@ -32,6 +33,5 @@ class BroadcastServer:
 
 
 if __name__ == '__main__':
-    discover_host = input('please insert discover ip address:')
-    broadcast_server = BroadcastServer(discover_host, DISCOVER_PORT)
+    broadcast_server = BroadcastServer(DISCOVER_IP, DISCOVER_PORT)
     broadcast_server.close()
