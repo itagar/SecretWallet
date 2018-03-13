@@ -4,7 +4,8 @@ import threading
 
 NUM_OF_SERVERS = 4
 BUFFER_SIZE = 1024
-DELIM = ','
+DELIM_1 = ','
+DELIM_2 = '~'
 DISCOVER_PORT = 5555
 
 
@@ -15,11 +16,10 @@ class Server:
         self.__discover.connect((discover_ip, discover_port))
         print('connected to discover server successfully.')
         data = self.__discover.recv(BUFFER_SIZE).decode()
-        print(data)
-        self.__id, broadcast_address = data.split(DELIM)
+        self.__id, broadcast_host, broadcast_ip = data.split(DELIM_1)
         print('server id is: ' + str(self.__id))
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__broadcast.connect(broadcast_address)
+        self.__broadcast.connect((broadcast_host, broadcast_ip))
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', port))
@@ -51,12 +51,13 @@ class Server:
             connections += 1
 
     def __connect_servers(self):
-        data = self.__discover.recv(BUFFER_SIZE).decode()
-        cur_id, cur_host, cur_port = data.split()
-        for _ in range(NUM_OF_SERVERS - 1):
-            self.__servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.__servers_out[cur_id].connect((cur_host, str(cur_port)))
-            self.__servers_out[cur_id].all(self.__id.encode())
+        addresses = self.__discover.recv(BUFFER_SIZE).decode().split(DELIM_2)
+        for address in addresses:
+            cur_id, cur_host, cur_port = address.split(DELIM_2)
+            if cur_id != self.__id:
+                self.__servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.__servers_out[cur_id].connect((cur_host, str(cur_port)))
+                self.__servers_out[cur_id].all(self.__id.encode())
 
     def accept_clients(self):
         pass
