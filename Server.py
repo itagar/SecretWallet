@@ -1,6 +1,7 @@
 import socket
+import select
 import random
-from threading import Thread, Lock
+from threading import Thread
 
 NUM_OF_SERVERS = 4
 BUFFER_SIZE = 1024
@@ -33,12 +34,14 @@ class Server:
         print('server id is: ' + str(self.__id))
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__broadcast.connect((broadcast_host, int(broadcast_port)))
+        self.__broadcast.sendall(str(self.__id).encode())
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
 
         # connect to other servers
         self.__servers_out = {}
         self.__servers_in = {}
         self.__secrets = {}
+        self.__clients = {}
         self.__establish_servers_connection()
         self.__discover.close()
 
@@ -74,41 +77,48 @@ class Server:
                 self.__servers_out[cur_id].sendall(self.__id.encode())
                 print('connected to server: ' + cur_id)
 
-    def __session(self, client_socket, client_id):
+    def __session(self, client_socket, client_id, request):
         print('started session with client: ', client_id)
 
-        # while GUI is opened
-        while True:
-            data = client_socket.recv(BUFFER_SIZE).decode().split()
-            request = data[0]
+        if request == STORE:
+            print('client: ', client_id, ' wish to store.')
+            self.__begin_store_session(client_socket, client_id)
 
-            if request == STORE:
-                name, key_req, value_req = data[1:]
-                self.__begin_store_session(client_socket, client_id, name, key_req, value_req)
+        elif request == RETRIEVE:
+            print('client: ', client_id, ' wish to retrieve.')
+            self.__begin_retrieve_session(client_socket, client_id)
 
-            elif request == RETRIEVE:
-                name, key_req = data[1:]
-                self.__begin_retrieve_session(client_socket, client_id, name, key_req)
-
-            else:  # end of session
-                break
-        print('session with client: ', client_id, ' closed successfully.')
-        client_socket.close()
+        else:
+            print('session with client: ', client_id, ' closed successfully.')
+            client_socket.close()
 
     def accept_clients(self):
         print('ready to accept clients')
+        inputs = [self.__welcome, self.__broadcast]
         while True:
             self.__welcome.listen(4)  # todo magic
-            conn, address = self.__welcome.accept()
-            client_id = conn.recv(BUFFER_SIZE)
-            print('connected to client: ', client_id)
-            t = Thread(target=self.__session, args=(conn, client_id))
-            t.start()
+            readable, writable, exceptional = select.select(inputs, [], inputs)
+            for r in readable:
 
-    def __begin_store_session(self, client_sock, client_id, name, key_share, value_share):
+                if r is self.__welcome:  # accept new clients
+                    conn, address = self.__welcome.accept()
+                    cid = int(conn.recv(2).decode())  # todo magic
+                    self.__clients[cid] = conn
+                    print('connected to client: ', cid)
+
+                elif r is self.__broadcast:  # new session
+                    data = self.__broadcast.recv(4).decode().split(DELIM_1)  # get client id
+                    cid, request = int(data[0]), int(data[1])
+                    client_sock = self.__clients[cid]
+                    self.__session(client_sock, cid, request)
+
+                else:  # todo close connection
+                    pass
+
+    def __begin_store_session(self, client_sock, client_id):
         pass
 
-    def __begin_retrieve_session(self, client_sock, client_id, name, key_share):
+    def __begin_retrieve_session(self, client_sock, client_id):
         pass
 
     def close(self):

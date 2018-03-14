@@ -9,15 +9,16 @@ class Client:
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((DISCOVER_IP, DISCOVER_PORT))
         data = discover.recv(BUFFER_SIZE).decode()
-        discover.close()
         addresses = data.split(DELIM_2)
-        self.__id = addresses[0]
+        self.__id = addresses[0]  # todo magic
         print('client: ', self.__id, ' discovered network')
+        discover.close()
 
         # connect to broadcast
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         broadcast_ip, broadcast_port = addresses[1].split(DELIM_1)
         self.__broadcast.connect((broadcast_ip, int(broadcast_port)))
+        self.__broadcast.sendall(self.__id.encode())
 
         # connect to servers
         self.__servers = {}
@@ -25,12 +26,11 @@ class Client:
             cur_id, cur_ip, cur_port = address.split(DELIM_1)
             self.__servers[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__servers[cur_id].connect((cur_ip, int(cur_port)))
+            self.__servers[cur_id].sendall(self.__id.encode())
+
             print('client connected successfully to server: ', cur_id,
                   ' in ip: ', cur_ip, ' and port: ', cur_port)
         print('client connected successfully to all servers')
-        for sid in self.__servers:  # todo remove all next lines
-            self.__servers[sid].sendall(str(END_SESSION).encode())
-            self.__servers[sid].close()
         self.__broadcast.sendall(str(END_SESSION).encode())
         self.__broadcast.close()
 
@@ -44,6 +44,7 @@ class Client:
         self.__broadcast.close()
         for sid in self.__servers:
             self.__servers[sid].close()
+
 
 if __name__ == '__main__':
     client = Client()

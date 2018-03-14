@@ -12,8 +12,8 @@ class DiscoverServer:
               ' and port: ' + str(DISCOVER_PORT))
 
         # connect to broadcast to get information for discovery
-        print('waiting for broadcast server to connect')
         self.__welcome.listen(1)
+        print('waiting for broadcast server to connect')
         broadcast_socket, broadcast_address = self.__welcome.accept()
         broadcast_host, broadcast_port = broadcast_socket.recv(BUFFER_SIZE).decode().split(DELIM_1)
         self.__broadcast_packet = broadcast_host + DELIM_1 + broadcast_port
@@ -61,7 +61,7 @@ class DiscoverServer:
             conn, address = self.__welcome.accept()
             # send to client all data required to connect to the system
             print('connected client: ', client_id)
-            data = str(client_id) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
+            data = str(client_id).zfill(2) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
             conn.sendall(data.encode())
             conn.close()
             print('discovered client: ', client_id, ' successfully')
