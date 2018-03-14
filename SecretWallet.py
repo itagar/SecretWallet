@@ -1,5 +1,7 @@
 import tkinter as tk
 import tkinter.messagebox
+import os
+import subprocess
 
 
 VERSION = 0.1
@@ -25,7 +27,7 @@ WINDOW_SIZE = '800x400'
 STATUS_TIMEOUT = 4000
 
 
-class Client:
+class ClientGUI:
 
     def __init__(self, master):
         self.__transactions = dict()
@@ -48,12 +50,48 @@ class Client:
     def __create_sub_title(self):
         sub_title_frame = tk.Frame(self.__master)
         tk.Label(sub_title_frame, height=2).pack()
-        tk.Label(sub_title_frame, text="Please select action...", font=('Verdana', 15), height=2).pack()
+        tk.Label(sub_title_frame, text="Please select action...",
+                 font=('Verdana', 15), height=2).pack()
         sub_title_frame.pack()
 
     def __create_status_bar(self):
         self.__status.config(bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.__status.pack(side=tk.BOTTOM, fill=tk.X)
+
+    @staticmethod
+    def __top_secret():
+        file_path = os.getcwd() + os.path.sep + 'TopSecret.mp3'
+        subprocess.Popen(r'vlc ' + file_path, shell=True)
+
+    def __create_menu(self):
+        main_menu = tk.Menu(self.__master, tearoff=False)
+        self.__master.config(menu=main_menu)
+
+        # Tools:
+        tools_menu = tk.Menu(main_menu, tearoff=False)
+        main_menu.add_cascade(label="Tools", menu=tools_menu)
+
+        # TODO: command.
+        tools_menu.add_command(label="Top Secret", command=self.__top_secret)
+
+        tools_menu.add_separator()
+
+        # Tools --> Command:
+        command_menu = tk.Menu(tools_menu, tearoff=False)
+        tools_menu.add_cascade(label="Command", menu=command_menu)
+        command_menu.add_command(label="Store", command=self.__store)
+        command_menu.add_command(label="Retrieve", command=self.__retrieve)
+
+        tools_menu.add_separator()
+
+        tools_menu.add_command(label="Exit", command=self.__master.quit)
+
+        # Help:
+        help_menu = tk.Menu(main_menu, tearoff=False)
+        main_menu.add_cascade(label="Help", menu=help_menu)
+        # TODO: Add commands.
+        help_menu.add_command(label="Help")
+        help_menu.add_command(label="About")
 
     def __status_change(self, status_message, bad=False):
         color = 'red' if bad else 'green'
@@ -180,8 +218,9 @@ class Client:
         self.__create_sub_title()
         self.__create_status_bar()
         self.__create_buttons()
+        self.__create_menu()
 
 
 if __name__ == '__main__':
     root = tk.Tk()
-    client = Client(root)
+    client = ClientGUI(root)
