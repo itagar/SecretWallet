@@ -1,5 +1,5 @@
 import socket
-from Server import *
+from Helper import *
 
 
 class Client:
@@ -31,16 +31,17 @@ class Client:
             print('client connected successfully to server: ', cur_id,
                   ' in ip: ', cur_ip, ' and port: ', cur_port)
         print('client connected successfully to all servers')
-        self.__broadcast.sendall(str(END_SESSION).encode())
-        self.__broadcast.close()
 
     def store(self, name, key, value):
+        print('start store: name=', name,', key=', key, ', value=', value)
         pass
 
-    def retrieve(self, name, key, value):
+    def retrieve(self, name, key):
+        print('start retrieve: name=', name,', key=', key)
         pass
 
     def close(self):
+        self.__broadcast.sendall(str(END_SESSION).encode())
         self.__broadcast.close()
         for sid in self.__servers:
             self.__servers[sid].close()
@@ -48,4 +49,15 @@ class Client:
 
 if __name__ == '__main__':
     client = Client()
+    while True:
+        request = input('what should i do next: ')
+        if request == 'store':
+            secret_name, secret_key, secret_value = input('please insert: name key value').split()
+            client.store(secret_name, secret_key, secret_value)
+        elif request == 'ret':
+            secret_name, secret_key = input('please insert: name key').split()
+            client.retrieve(secret_name, secret_key)
+        else:
+            print('see you next time.')
+            break
     client.close()

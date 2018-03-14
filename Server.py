@@ -2,16 +2,7 @@ import socket
 import select
 import random
 from threading import Thread
-
-NUM_OF_SERVERS = 4
-BUFFER_SIZE = 1024
-DELIM_1 = ','
-DELIM_2 = '~'
-DISCOVER_IP = '127.0.0.1'
-DISCOVER_PORT = 5555
-END_SESSION = 0
-STORE = 1
-RETRIEVE = 2
+import Helper
 
 
 class Server:

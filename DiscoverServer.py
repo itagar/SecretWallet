@@ -1,5 +1,5 @@
 import socket
-from Server import NUM_OF_SERVERS, DELIM_1, DELIM_2, DISCOVER_PORT, BUFFER_SIZE
+from Helper import *
 
 
 class DiscoverServer:
