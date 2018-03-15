@@ -20,8 +20,7 @@ HELP_TITLE = "Help"
 ABOUT_TITLE = "About"
 EMPTY_ENTRY_ERROR = "Error: Empty entries"
 NAME_ERROR = "Error: Name is already stored"
-INVALID_NAME_ERROR = "Invalid Name"
-INVALID_KEY_ERROR = "Invalid Key"
+INVALID_RETRIEVE_ERROR = "Invalid Name/Key"
 STORE_SUCCESS_MSG = "Successfully Stored!"
 STORE_FAILURE_MSG = "Store Failed."
 RETRIEVE_SUCCESS_MSG = "Successfully Retrieved!"
@@ -275,17 +274,17 @@ class ClientGUI:
                 return
 
             if transaction_id not in self.__transactions.keys():
-                info_label.config(text=INVALID_NAME_ERROR, fg='red')
-                tkinter.messagebox.showerror(ERROR_TITLE, INVALID_NAME_ERROR)
+                info_label.config(text=INVALID_RETRIEVE_ERROR, fg='red')
                 self.__status_change(RETRIEVE_FAILURE_MSG, True)
                 return
 
             real_key, real_value = self.__transactions[transaction_id]
             if key != real_key:
-                info_label.config(text=INVALID_KEY_ERROR, fg='red')
+                info_label.config(text=INVALID_RETRIEVE_ERROR, fg='red')
                 self.__status_change(RETRIEVE_FAILURE_MSG, True)
             else:
                 value_string.set(real_value)
+                info_label.config(text=RETRIEVE_SUCCESS_MSG, fg='green')
                 self.__status_change(RETRIEVE_SUCCESS_MSG)
 
         button_frame = tk.Frame(retrieve_window)
