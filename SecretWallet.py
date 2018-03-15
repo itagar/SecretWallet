@@ -4,16 +4,20 @@ import os
 import subprocess
 
 
+# Titles and Messages:
 VERSION = 0.1
 VERSION_TITLE = "(Version " + str(VERSION) + ")"
 GUI_TITLE = "Secret Wallet"
-DEFAULT_STATUS = "Select \'Store\' in order to store, or select \'Retrieve\' in order to retrieve."
+DEFAULT_STATUS = "Select \'Store\' in order to store, " \
+                 "or select \'Retrieve\' in order to retrieve."
 STORE_TITLE = "Store"
 RETRIEVE_TITLE = "Retrieve"
 NAME_LABEL = "Name"
 KEY_LABEL = "Key"
 VALUE_LABEL = "Value"
 ERROR_TITLE = "Error"
+HELP_TITLE = "Help"
+ABOUT_TITLE = "About"
 EMPTY_ENTRY_ERROR = "Cannot store empty entries"
 NAME_ERROR = "Name is already stored"
 INVALID_NAME_ERROR = "Invalid Name"
@@ -22,6 +26,16 @@ STORE_SUCCESS_MSG = "Successfully Stored!"
 STORE_FAILURE_MSG = "Store Failed."
 RETRIEVE_SUCCESS_MSG = "Successfully Retrieved!"
 RETRIEVE_FAILURE_MSG = "Retrieve Failed."
+
+# Images Attributes:
+TITLE_IMAGE = "Title.png"
+STORE_IMAGE = "Store.png"
+RETRIEVE_IMAGE = "Retrieve.png"
+
+BAD_STATUS_COLOR = 'red'
+GOOD_STATUS_COLOR = 'green'
+DEFAULT_STATUS_COLOR = 'black'
+
 EMPTY_ENTRY = ""
 WINDOW_SIZE = '800x400'
 STATUS_TIMEOUT = 4000
@@ -30,6 +44,7 @@ STATUS_TIMEOUT = 4000
 class ClientGUI:
 
     def __init__(self, master):
+        """ Initialize the GUI window for the client. """
         self.__transactions = dict()
 
         self.__master = master
@@ -37,17 +52,20 @@ class ClientGUI:
         self.__create_window()
         self.__master.mainloop()
 
+    # ==----   GUI Creation Functions   ----== #
+
     def __create_title(self):
+        """ Creates the title of the main window. """
         self.__master.title(GUI_TITLE + " " + VERSION_TITLE)
         title_frame = tk.Frame(self.__master)
-        title_image = tk.PhotoImage(file="Title.png")
+        title_image = tk.PhotoImage(file=TITLE_IMAGE)
         title = tk.Label(title_frame, image=title_image)
         title.image = title_image  # Required for displaying the image.
-
         title.pack()
         title_frame.pack()
 
     def __create_sub_title(self):
+        """ Creates the secondary title of the main window. """
         sub_title_frame = tk.Frame(self.__master)
         tk.Label(sub_title_frame, height=2).pack()
         tk.Label(sub_title_frame, text="Please select action...",
@@ -55,46 +73,83 @@ class ClientGUI:
         sub_title_frame.pack()
 
     def __create_status_bar(self):
+        """ Creates the status bar of the GUI. """
         self.__status.config(bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.__status.pack(side=tk.BOTTOM, fill=tk.X)
 
     @staticmethod
     def __top_secret():
-        file_path = os.getcwd() + os.path.sep + 'TopSecret.mp3'
+        file_path = os.getcwd() + os.path.sep + "TopSecret.mp3"
         subprocess.Popen(r'vlc ' + file_path, shell=True)
 
     def __create_menu(self):
+        """ Creates the top main menu of the GUI. """
+        # The Main Menu panel.
         main_menu = tk.Menu(self.__master, tearoff=False)
         self.__master.config(menu=main_menu)
 
-        # Tools:
+        # Tools Menu:
         tools_menu = tk.Menu(main_menu, tearoff=False)
         main_menu.add_cascade(label="Tools", menu=tools_menu)
-
-        # TODO: command.
+        # Tools --> Top Secret.
         tools_menu.add_command(label="Top Secret", command=self.__top_secret)
-
         tools_menu.add_separator()
-
         # Tools --> Command:
         command_menu = tk.Menu(tools_menu, tearoff=False)
         tools_menu.add_cascade(label="Command", menu=command_menu)
         command_menu.add_command(label="Store", command=self.__store)
         command_menu.add_command(label="Retrieve", command=self.__retrieve)
-
         tools_menu.add_separator()
-
+        # Tools --> Exit.
         tools_menu.add_command(label="Exit", command=self.__master.quit)
 
-        # Help:
+        # Help Menu:
         help_menu = tk.Menu(main_menu, tearoff=False)
         main_menu.add_cascade(label="Help", menu=help_menu)
-        # TODO: Add commands.
-        help_menu.add_command(label="Help")
-        help_menu.add_command(label="About")
+        # Help --> Help.
+        help_menu.add_command(label="Help", command=self.__help)
+        # Help --> About.
+        help_menu.add_command(label="About", command=self.__about)
+
+    def __create_buttons(self):
+        """ Creates the buttons of the main window. """
+        button_bar = tk.Frame(self.__master)
+        button_bar.pack(side=tk.TOP, fill=tk.X)
+        store_icon = tk.PhotoImage(file=STORE_IMAGE).subsample(2, 2)
+        retrieve_icon = tk.PhotoImage(file=RETRIEVE_IMAGE).subsample(2, 2)
+
+        store_button = tk.Button(button_bar, command=self.__store)
+        store_button.config(image=store_icon)
+        store_button.image = store_icon
+
+        retrieve_button = tk.Button(button_bar, command=self.__retrieve)
+        retrieve_button.config(image=retrieve_icon)
+        retrieve_button.image = retrieve_icon
+
+        store_button.pack(side=tk.LEFT, padx=100, pady=15)
+        retrieve_button.pack(side=tk.RIGHT, padx=100, pady=15)
+
+    def __create_window(self):
+        """ Creates the GUI main window using all the above functions. """
+        self.__master.geometry(WINDOW_SIZE)
+        self.__master.resizable(False, False)
+        self.__create_title()
+        self.__create_sub_title()
+        self.__create_status_bar()
+        self.__create_buttons()
+        self.__create_menu()
+
+    # ==----   GUI Commands Functions   ----== #
+
+    def __reset_status(self):
+        """ Resets the status label in the status bar. """
+        self.__status.config(text=DEFAULT_STATUS, fg=DEFAULT_STATUS_COLOR)
 
     def __status_change(self, status_message, bad=False):
-        color = 'red' if bad else 'green'
+        """ Changes the status label in the status bar to the
+        given status message. The 'bad' parameter determines the color
+        of the text in the status label. """
+        color = BAD_STATUS_COLOR if bad else GOOD_STATUS_COLOR
         self.__status.config(text=status_message, fg=color)
         self.__status.after(STATUS_TIMEOUT, self.__reset_status)
 
@@ -191,34 +246,27 @@ class ClientGUI:
 
         print(self.__transactions)
 
-    def __reset_status(self):
-        self.__status.config(text=DEFAULT_STATUS, fg='black')
+    @staticmethod
+    def __help():
+        """ Opens help window with information to the user. """
+        info_window = tk.Toplevel()
+        info_window.resizable(width=False, height=False)
+        info_window.title("Help")
+        info_image = tk.PhotoImage(file="Help.png")
+        info_msg = tk.Label(info_window, image=info_image)
+        info_msg.image = info_image  # Required for displaying the image.
+        info_msg.pack()
 
-    def __create_buttons(self):
-        button_bar = tk.Frame(self.__master)
-        button_bar.pack(side=tk.TOP, fill=tk.X)
-        store_icon = tk.PhotoImage(file="Store.png").subsample(2, 2)
-        retrieve_icon = tk.PhotoImage(file="Retrieve.png").subsample(2, 2)
-
-        store_button = tk.Button(button_bar, command=self.__store)
-        store_button.config(image=store_icon)
-        store_button.image = store_icon
-
-        retrieve_button = tk.Button(button_bar, command=self.__retrieve)
-        retrieve_button.config(image=retrieve_icon)
-        retrieve_button.image = retrieve_icon
-
-        store_button.pack(side=tk.LEFT, padx=100, pady=15)
-        retrieve_button.pack(side=tk.RIGHT, padx=100, pady=15)
-
-    def __create_window(self):
-        self.__master.geometry(WINDOW_SIZE)
-        self.__master.resizable(False, False)
-        self.__create_title()
-        self.__create_sub_title()
-        self.__create_status_bar()
-        self.__create_buttons()
-        self.__create_menu()
+    @staticmethod
+    def __about():
+        """ Opens about window with information about the application. """
+        about_window = tk.Toplevel()
+        about_window.resizable(width=False, height=False)
+        about_window.title("About")
+        about_image = tk.PhotoImage(file="About.png")
+        info_msg = tk.Label(about_window, image=about_image)
+        info_msg.image = about_image  # Required for displaying the image.
+        info_msg.pack()
 
 
 if __name__ == '__main__':
