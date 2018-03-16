@@ -45,7 +45,7 @@ class ClientGUI:
 
     def __init__(self, master):
         """ Initialize the GUI window for the client. """
-        self.__transactions = {'1': ('2', '3')}  # TODO: Delete This.
+        self.__transactions = {}  # TODO: Delete This.
 
         self.__master = master
         self.__status = tk.Label(master, text=DEFAULT_STATUS)
