@@ -2,7 +2,7 @@ import socket
 import select
 import random
 from threading import Thread
-import Helper
+from Helper import *
 
 
 class Server:
@@ -73,22 +73,22 @@ class Server:
 
         if request == STORE:
             print('client: ', client_id, ' wish to store.')
-            self.__begin_store_session(client_socket, client_id)
+            self.__store_session(client_socket, client_id)
 
         elif request == RETRIEVE:
             print('client: ', client_id, ' wish to retrieve.')
-            self.__begin_retrieve_session(client_socket, client_id)
+            self.__retrieve_session(client_socket, client_id)
 
         else:
             print('session with client: ', client_id, ' closed successfully.')
             client_socket.close()
 
-    def accept_clients(self):
+    def handle_requests(self):
         print('ready to accept clients')
         inputs = [self.__welcome, self.__broadcast]
         while True:
             self.__welcome.listen(4)  # todo magic
-            readable, writable, exceptional = select.select(inputs, [], inputs)
+            readable, writable, exceptional = select.select(inputs, [], inputs)  # todo check closing sockets
             for r in readable:
 
                 if r is self.__welcome:  # accept new clients
@@ -98,7 +98,8 @@ class Server:
                     print('connected to client: ', cid)
 
                 elif r is self.__broadcast:  # new session
-                    data = self.__broadcast.recv(4).decode().split(DELIM_1)  # get client id
+                    # get cid and request type
+                    data = self.__broadcast.recv(6).decode().split(SENDER_DELIM).split(DELIM_1) # todo magic
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -106,10 +107,10 @@ class Server:
                 else:  # todo close connection
                     pass
 
-    def __begin_store_session(self, client_sock, client_id):
+    def __store_session(self, client_sock, client_id):
         pass
 
-    def __begin_retrieve_session(self, client_sock, client_id):
+    def __retrieve_session(self, client_sock, client_id):
         pass
 
     def close(self):
@@ -125,5 +126,5 @@ class Server:
 if __name__ == '__main__':
     welcome_port = random.randint(6000, 8000)  # todo change port assignment to discover
     server = Server(welcome_port, DISCOVER_IP, DISCOVER_PORT)
-    server.accept_clients()
+    server.handle_requests()
     server.close()

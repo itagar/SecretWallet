@@ -14,11 +14,10 @@ class Client:
         print('client: ', self.__id, ' discovered network')
         discover.close()
 
-        # connect to broadcast
+        # socket for broadcast
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        broadcast_ip, broadcast_port = addresses[1].split(DELIM_1)
-        self.__broadcast.connect((broadcast_ip, int(broadcast_port)))
-        self.__broadcast.sendall(self.__id.encode())
+        self.__broadcast_address = addresses[1].split(DELIM_1)
+        self.__broadcast_address[1] = int(self.__broadcast_address[1])
 
         # connect to servers
         self.__servers = {}
@@ -33,12 +32,30 @@ class Client:
         print('client connected successfully to all servers')
 
     def store(self, name, key, value):
-        print('start store: name=', name,', key=', key, ', value=', value)
-        pass
+        self.__start_session()
+        print('start store: name=', name, ', key=', key, ', value=', value)
+        self.__broadcast.sendall(name)  # todo name already taken
+        if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
+            print('error with storing key')
+            return ERROR
+        if deal_vss(self.__servers, self.__broadcast, value) == ERROR:
+            print('error with storing value')
+            return ERROR
+        print('store key,value sucessfully')
+        return OK
 
     def retrieve(self, name, key):
+        self.__start_session()
         print('start retrieve: name=', name,', key=', key)
+        self.__end_session()
         pass
+
+    def __start_session(self):
+        self.__broadcast.connect(self.__broadcast_address)
+        self.__broadcast.sendall(self.__id.encode())
+
+    def __end_session(self):
+        self.__broadcast.close()
 
     def close(self):
         self.__broadcast.sendall(str(END_SESSION).encode())
