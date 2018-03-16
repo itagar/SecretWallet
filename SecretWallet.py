@@ -1,5 +1,4 @@
 import tkinter as tk
-import tkinter.messagebox
 import os
 import subprocess
 
@@ -20,7 +19,8 @@ HELP_TITLE = "Help"
 ABOUT_TITLE = "About"
 EMPTY_ENTRY_ERROR = "Error: Empty entries"
 NAME_ERROR = "Error: Name is already stored"
-INVALID_RETRIEVE_ERROR = "Invalid Name/Key"
+INVALID_KEY_ERROR = "Invalid Key"
+INVALID_NAME_ERROR = "Invalid Name"
 STORE_SUCCESS_MSG = "Successfully Stored!"
 STORE_FAILURE_MSG = "Store Failed."
 RETRIEVE_SUCCESS_MSG = "Successfully Retrieved!"
@@ -45,7 +45,7 @@ class ClientGUI:
 
     def __init__(self, master):
         """ Initialize the GUI window for the client. """
-        self.__transactions = {'1': ('2', '3')}
+        self.__transactions = {'1': ('2', '3')}  # TODO: Delete This.
 
         self.__master = master
         self.__status = tk.Label(master, text=DEFAULT_STATUS)
@@ -71,7 +71,6 @@ class ClientGUI:
         sub_title = tk.Label(sub_title_frame, image=sub_title_image)
         sub_title.image = sub_title_image  # Required for displaying the image.
         sub_title.pack()
-
         sub_title_frame.pack()
 
     def __create_status_bar(self):
@@ -81,6 +80,7 @@ class ClientGUI:
 
     @staticmethod
     def __top_secret():
+        """ Activates Top Secret function. """
         file_path = os.getcwd() + os.path.sep + "TopSecret.mp3"
         subprocess.Popen(r'vlc ' + file_path, shell=True)
 
@@ -117,16 +117,23 @@ class ClientGUI:
         """ Creates the buttons of the main window. """
         button_bar = tk.Frame(self.__master)
         button_bar.pack(side=tk.TOP, fill=tk.X)
+        # Load button images.
         store_icon = tk.PhotoImage(file=STORE_IMAGE).subsample(2, 2)
         retrieve_icon = tk.PhotoImage(file=RETRIEVE_IMAGE).subsample(2, 2)
 
         store_button = tk.Button(button_bar, command=self.__store)
         store_button.config(image=store_icon)
         store_button.image = store_icon
+        # Mouse hover.
+        store_button.bind('<Enter>', lambda event: self.__status.config(text='Store'))
+        store_button.bind('<Leave>', lambda event: self.__reset_status())
 
         retrieve_button = tk.Button(button_bar, command=self.__retrieve)
         retrieve_button.config(image=retrieve_icon)
         retrieve_button.image = retrieve_icon
+        # Mouse hover.
+        retrieve_button.bind('<Enter>', lambda event: self.__status.config(text='Retrieve'))
+        retrieve_button.bind('<Leave>', lambda event: self.__reset_status())
 
         store_button.pack(side=tk.LEFT, padx=100, pady=15)
         retrieve_button.pack(side=tk.RIGHT, padx=100, pady=15)
@@ -135,6 +142,7 @@ class ClientGUI:
         """ Creates the GUI main window using all the above functions. """
         self.__master.geometry(WINDOW_SIZE)
         self.__master.resizable(False, False)
+
         self.__create_title()
         self.__create_sub_title()
         self.__create_status_bar()
@@ -163,21 +171,21 @@ class ClientGUI:
         transaction_frame = tk.Frame(store_window)
         transaction_label = tk.Label(transaction_frame, width=10, text=NAME_LABEL, anchor='w')
         transaction_entry = tk.Entry(transaction_frame, width=30)
-        transaction_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        transaction_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         transaction_label.pack(side=tk.LEFT)
         transaction_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
         key_frame = tk.Frame(store_window)
         key_label = tk.Label(key_frame, width=10, text=KEY_LABEL, anchor='w')
         key_entry = tk.Entry(key_frame, width=30)
-        key_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        key_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         key_label.pack(side=tk.LEFT)
         key_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
         value_frame = tk.Frame(store_window)
         value_label = tk.Label(value_frame, width=10, text=VALUE_LABEL, anchor='w')
         value_entry = tk.Entry(value_frame, width=30)
-        value_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        value_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         value_label.pack(side=tk.LEFT)
         value_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
@@ -214,16 +222,16 @@ class ClientGUI:
 
         button_frame = tk.Frame(store_window)
         store_button = tk.Button(button_frame, text='Store',
-                                 command=lambda: store_command(transaction_entry.get(),
-                                                               key_entry.get(),
-                                                               value_entry.get()))
-        cancel_button = tk.Button(button_frame, text='Cancel',
-                                  command=store_window.destroy)
-        button_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+                                 command=lambda:
+                                 store_command(transaction_entry.get(),
+                                               key_entry.get(),
+                                               value_entry.get()))
+        cancel_button = tk.Button(button_frame, text='Cancel', command=store_window.destroy)
+        button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         store_button.pack()
         cancel_button.pack()
 
-        print(self.__transactions)
+        print(self.__transactions)  # TODO: Delete This.
 
     def __retrieve(self):
         retrieve_window = tk.Toplevel()
@@ -231,26 +239,25 @@ class ClientGUI:
         retrieve_window.resizable(False, False)
 
         transaction_frame = tk.Frame(retrieve_window)
-        transaction_label = tk.Label(transaction_frame, width=10,
-                                     text=NAME_LABEL, anchor='w')
+        transaction_label = tk.Label(transaction_frame, width=10, text=NAME_LABEL, anchor='w')
         transaction_entry = tk.Entry(transaction_frame, width=30)
-        transaction_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        transaction_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         transaction_label.pack(side=tk.LEFT)
         transaction_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
         key_frame = tk.Frame(retrieve_window)
         key_label = tk.Label(key_frame, width=10, text=KEY_LABEL, anchor='w')
         key_entry = tk.Entry(key_frame, width=30)
-        key_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        key_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         key_label.pack(side=tk.LEFT)
         key_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
         value_frame = tk.Frame(retrieve_window)
-        value_label = tk.Label(value_frame, width=10, text=VALUE_LABEL,
-                               anchor='w')
+        value_label = tk.Label(value_frame, width=10, text=VALUE_LABEL, anchor='w')
         value_string = tk.StringVar()
-        value_entry = tk.Entry(value_frame, width=30, fg='black', state=tk.DISABLED, textvariable=value_string)
-        value_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+        value_entry = tk.Label(value_frame, width=30, relief=tk.RIDGE, bd=1,
+                               anchor=tk.W, textvariable=value_string)
+        value_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         value_label.pack(side=tk.LEFT)
         value_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
 
@@ -261,6 +268,7 @@ class ClientGUI:
             # Reset entries highlight.
             transaction_entry.config(highlightbackground="grey")
             key_entry.config(highlightbackground="grey")
+            value_string.set(EMPTY_ENTRY)
 
             # Highlight empty entries.
             if transaction_id == EMPTY_ENTRY or key == EMPTY_ENTRY:
@@ -274,13 +282,13 @@ class ClientGUI:
                 return
 
             if transaction_id not in self.__transactions.keys():
-                info_label.config(text=INVALID_RETRIEVE_ERROR, fg='red')
+                info_label.config(text=INVALID_NAME_ERROR, fg='red')
                 self.__status_change(RETRIEVE_FAILURE_MSG, True)
                 return
 
             real_key, real_value = self.__transactions[transaction_id]
             if key != real_key:
-                info_label.config(text=INVALID_RETRIEVE_ERROR, fg='red')
+                info_label.config(text=INVALID_KEY_ERROR, fg='red')
                 self.__status_change(RETRIEVE_FAILURE_MSG, True)
             else:
                 value_string.set(real_value)
@@ -289,15 +297,15 @@ class ClientGUI:
 
         button_frame = tk.Frame(retrieve_window)
         store_button = tk.Button(button_frame, text='Retrieve',
-                                 command=lambda: retrieve_command(transaction_entry.get(),
-                                                                  key_entry.get()))
-        cancel_button = tk.Button(button_frame, text='Cancel',
-                                  command=retrieve_window.destroy)
-        button_frame.pack(side=tk.TOP, fill=tk.X, padx=3, pady=3)
+                                 command=lambda:
+                                 retrieve_command(transaction_entry.get(),
+                                                  key_entry.get()))
+        cancel_button = tk.Button(button_frame, text='Cancel', command=retrieve_window.destroy)
+        button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         store_button.pack()
         cancel_button.pack()
 
-        print(self.__transactions)
+        print(self.__transactions)  # TODO: Delete This.
 
     @staticmethod
     def __help():
