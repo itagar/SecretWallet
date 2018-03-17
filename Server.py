@@ -23,14 +23,14 @@ class Server:
         # connect to broadcast server
         self.__id, broadcast_host, broadcast_port = data.split(DELIM_1)
         print('server id is: ' + str(self.__id))
-        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__broadcast.connect((broadcast_host, int(broadcast_port)))
-        self.__broadcast.sendall(str(self.__id).encode())
+        self.broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.broadcast.connect((broadcast_host, int(broadcast_port)))
+        self.broadcast.sendall(str(self.__id).encode())
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
 
         # connect to other servers
-        self.__servers_out = {}
-        self.__servers_in = {}
+        self.servers_out = {}
+        self.servers_in = {}
         self.__secrets = {}
         self.__clients = {}
         self.__establish_servers_connection()
@@ -54,7 +54,7 @@ class Server:
             self.__welcome.listen(NUM_OF_SERVERS-1)
             conn, address = self.__welcome.accept()
             cur_id = conn.recv(BUFFER_SIZE).decode()
-            self.__servers_in[cur_id] = conn
+            self.servers_in[cur_id] = conn
             connections += 1
             print('accepted connection from server: ' + cur_id)
 
@@ -63,9 +63,9 @@ class Server:
         for address in addresses:
             cur_id, cur_host, cur_port = address.split(DELIM_1)
             if cur_id != self.__id:
-                self.__servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.__servers_out[cur_id].connect((cur_host, int(cur_port)))
-                self.__servers_out[cur_id].sendall(self.__id.encode())
+                self.servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.servers_out[cur_id].connect((cur_host, int(cur_port)))
+                self.servers_out[cur_id].sendall(self.__id.encode())
                 print('connected to server: ' + cur_id)
 
     def __session(self, client_socket, client_id, request):
@@ -85,7 +85,7 @@ class Server:
 
     def handle_requests(self):
         print('ready to accept clients')
-        inputs = [self.__welcome, self.__broadcast]
+        inputs = [self.__welcome, self.broadcast]
         while True:
             self.__welcome.listen(4)  # todo magic
             readable, writable, exceptional = select.select(inputs, [], inputs)  # todo check closing sockets
@@ -97,9 +97,9 @@ class Server:
                     self.__clients[cid] = conn
                     print('connected to client: ', cid)
 
-                elif r is self.__broadcast:  # new session
+                elif r is self.broadcast:  # new session
                     # get cid and request type
-                    data = self.__receive_broadcast(6)[1].split(DELIM_1) # todo magic
+                    data = self.receive_broadcast(6)[1].split(DELIM_1)  # todo magic
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -113,19 +113,19 @@ class Server:
     def __retrieve_session(self, client_sock, client_id):
         pass
 
-    def __receive_broadcast(self, size=BUFFER_SIZE):
-        data = self.__broadcast.recv(size).decode()
+    def receive_broadcast(self, size=BUFFER_SIZE):
+        data = self.broadcast.recv(size).decode()
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
     def close(self):
         self.__welcome.close()
         self.__discover.close()
-        self.__broadcast.close()
-        for sid in self.__servers_in:
-            self.__servers_in[sid].close()
-        for sid in self.__servers_out:
-            self.__servers_out[sid].close()
+        self.broadcast.close()
+        for sid in self.servers_in:
+            self.servers_in[sid].close()
+        for sid in self.servers_out:
+            self.servers_out[sid].close()
 
 
 if __name__ == '__main__':

@@ -15,9 +15,12 @@ class Client:
         discover.close()
 
         # socket for broadcast
-        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__broadcast_address = addresses[1].split(DELIM_1)
-        self.__broadcast_address[1] = int(self.__broadcast_address[1])
+        self.__broadcast = None
+        self.__broadcast_address = (addresses[1].split(DELIM_1))
+        self.__broadcast_address = (self.__broadcast_address[0], int(self.__broadcast_address[1]))
+        print('addresses: ', addresses)
+        print('broadcast: ', self.__broadcast_address)
+        print(type(self.__broadcast_address))
 
         # connect to servers
         self.__servers = {}
@@ -32,20 +35,23 @@ class Client:
         print('client connected successfully to all servers')
 
     def store(self, name, key, value):
-        self.__start_session()
+        self.__start_session(STORE)
         print('start store: name=', name, ', key=', key, ', value=', value)
-        self.__broadcast.sendall(name)  # todo name already taken
-        if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
-            print('error with storing key')
-            return ERROR
-        if deal_vss(self.__servers, self.__broadcast, value) == ERROR:
-            print('error with storing value')
-            return ERROR
-        print('store key,value sucessfully')
+        # self.__broadcast.sendall(name)  # todo name already taken
+        # if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
+        #     print('error with storing key')
+        #     self.__end_session()
+        #     return ERROR
+        # if deal_vss(self.__servers, self.__broadcast, value) == ERROR:
+        #     print('error with storing value')
+        #     self.__end_session()
+        #     return ERROR
+        print('store key,value successfully')
+        self.__end_session()
         return OK
 
     def retrieve(self, name, key):
-        self.__start_session()
+        self.__start_session(RETRIEVE)
         print('start retrieve: name=', name,', key=', key)
         self.__end_session()
         pass
@@ -55,16 +61,19 @@ class Client:
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
-    def __start_session(self):
+    def __start_session(self, request_type):
+        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__broadcast.connect(self.__broadcast_address)
-        self.__broadcast.sendall(self.__id.encode())
+        data = self.__id + DELIM_1 + str(request_type)
+        self.__broadcast.sendall(data.encode())
 
     def __end_session(self):
+        print('ended session')
         self.__broadcast.close()
 
     def close(self):
-        self.__broadcast.sendall(str(END_SESSION).encode())
-        self.__broadcast.close()
+        print('client closed connection')
+        self.__start_session(END_SESSION)
         for sid in self.__servers:
             self.__servers[sid].close()
 
@@ -79,7 +88,9 @@ if __name__ == '__main__':
         elif request == 'ret':
             secret_name, secret_key = input('please insert: name key').split()
             client.retrieve(secret_name, secret_key)
-        else:
+        elif request == 'exit':
             print('see you next time.')
             break
+        else:
+            print('Invalid Usage')
     client.close()

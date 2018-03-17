@@ -31,13 +31,6 @@ class BroadcastServer:
             print('connected successfully to server: ' + sid)
             self.__servers[sid] = conn
 
-    def __session(self, cid, client_sock, request):
-        print('session started with: ', cid)
-        data = str(cid).zfill(2) + DELIM_1 + str(request)  # todo magic
-        for server_sock in self.__servers.values():
-            server_sock.sendall(data.encode())
-        self.__inputs.remove(client_sock)
-
     def __get_sid(self, sock):
         for sid, server_sock in self.__servers.items():
             if sock is server_sock:
@@ -45,6 +38,7 @@ class BroadcastServer:
 
     def __send_broadcast(self, sender_id, sender_sock, data):
         data = str(sender_id) + SENDER_DELIM + data
+        print('send broadcast: ', data)
         for sock in self.__outputs:
             if sock is not sender_sock:
                 sock.sendall(data.encode())
@@ -61,23 +55,28 @@ class BroadcastServer:
         while True:
             self.__welcome.listen(4)  # todo magic
             readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)  # todo check writing
-
+            print(readable)
             for r in readable:
 
-                if r is self.__welcome and not busy:  # accept new client
+                if r is self.__welcome and not busy:  # accept new client if no client is already connected
                     client_sock, address = self.__welcome.accept()
                     busy = True
-                    data = client_sock.recv(4).decode()  # todo magic
+                    data = client_sock.recv(BUFFER_SIZE).decode()  # todo magic
                     client_id = data.split(DELIM_1)[0]
-                    self.handle()
                     print('connected to client: ', client_id)
                     broadcast_server.__send_broadcast(CLIENT_SENDER_ID, client_sock, data)
                     self.__inputs.append(client_sock)
                     self.__outputs.append(client_sock)
-                elif r is client_sock:
+                elif r is client_sock:  # get info from existing client
                     data = r.recv(BUFFER_SIZE).decode()
-                    self.__send_broadcast(CLIENT_SENDER_ID, r, data)
-                else:
+                    if not data:  # client closed connection
+                        self.__inputs.remove(r)
+                        self.__outputs.remove(r)
+                        r.close()
+                        busy = False
+                    else:  # client send message
+                        self.__send_broadcast(CLIENT_SENDER_ID, r, data)
+                else:  # get info from servers.
                     data = r.recv(BUFFER_SIZE).decode()
                     self.__send_broadcast(self.__get_sid(r), r, data)  # todo magic
 
@@ -85,6 +84,7 @@ class BroadcastServer:
                 # Stop listening for input on the connection
                 self.__inputs.remove(s)
                 self.__outputs.remove(s)
+                print('closed connection with client: ' + str(client_id))
                 s.close()
                 busy = False
 
