@@ -99,7 +99,7 @@ class Server:
 
                 elif r is self.__broadcast:  # new session
                     # get cid and request type
-                    data = self.__broadcast.recv(6).decode().split(SENDER_DELIM).split(DELIM_1) # todo magic
+                    data = self.__receive_broadcast(6)[1].split(DELIM_1) # todo magic
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -112,6 +112,11 @@ class Server:
 
     def __retrieve_session(self, client_sock, client_id):
         pass
+
+    def __receive_broadcast(self, size=BUFFER_SIZE):
+        data = self.__broadcast.recv(size).decode()
+        sender, data = data.split(SENDER_DELIM)
+        return int(sender), data
 
     def close(self):
         self.__welcome.close()

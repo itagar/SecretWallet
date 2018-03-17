@@ -50,6 +50,11 @@ class Client:
         self.__end_session()
         pass
 
+    def __receive_broadcast(self, size=BUFFER_SIZE):
+        data = self.__broadcast.recv(size).decode()
+        sender, data = data.split(SENDER_DELIM)
+        return int(sender), data
+
     def __start_session(self):
         self.__broadcast.connect(self.__broadcast_address)
         self.__broadcast.sendall(self.__id.encode())
