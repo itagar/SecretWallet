@@ -4,6 +4,8 @@ import random
 from threading import Thread
 from Helper import *
 
+BUFFER_SIZE = 1024
+
 
 class Server:
 
@@ -22,6 +24,7 @@ class Server:
 
         # connect to broadcast server
         self.__id, broadcast_host, broadcast_port = data.split(DELIM_1)
+        self.__id = int(self.__id)
         print('server id is: ' + str(self.__id))
         self.broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.broadcast.connect((broadcast_host, int(broadcast_port)))
@@ -62,11 +65,12 @@ class Server:
         addresses = self.__discover.recv(BUFFER_SIZE).decode().split(DELIM_2)
         for address in addresses:
             cur_id, cur_host, cur_port = address.split(DELIM_1)
+            cur_id = int(cur_id)
             if cur_id != self.__id:
                 self.servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.servers_out[cur_id].connect((cur_host, int(cur_port)))
-                self.servers_out[cur_id].sendall(self.__id.encode())
-                print('connected to server: ' + cur_id)
+                self.servers_out[cur_id].sendall(str(self.__id).encode())
+                print('connected to server: ' + str(cur_id))
 
     def __session(self, client_socket, client_id, request):
         print('started session with client: ', client_id)
@@ -108,7 +112,7 @@ class Server:
                     pass
 
     def __store_session(self, client_sock, client_id):
-        pass
+        return node_vss(self, client_sock)
 
     def __retrieve_session(self, client_sock, client_id):
         pass

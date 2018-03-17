@@ -26,6 +26,7 @@ class Client:
         self.__servers = {}
         for address in addresses[2:]:
             cur_id, cur_ip, cur_port = address.split(DELIM_1)
+            cur_id = int(cur_id)
             self.__servers[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__servers[cur_id].connect((cur_ip, int(cur_port)))
             self.__servers[cur_id].sendall(self.__id.encode())
@@ -38,9 +39,9 @@ class Client:
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', key, ', value=', value)
         # self.__broadcast.sendall(name)  # todo name already taken
-        # if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
-        #     print('error with storing key')
-        #     self.__end_session()
+        if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
+            print('error with storing key')
+            self.__end_session()
         #     return ERROR
         # if deal_vss(self.__servers, self.__broadcast, value) == ERROR:
         #     print('error with storing value')

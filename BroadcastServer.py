@@ -55,7 +55,6 @@ class BroadcastServer:
         while True:
             self.__welcome.listen(4)  # todo magic
             readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)  # todo check writing
-            print(readable)
             for r in readable:
 
                 if r is self.__welcome and not busy:  # accept new client if no client is already connected
