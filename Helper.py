@@ -2,6 +2,7 @@ from numpy.polynomial.polynomial import polyval2d
 import numpy as np
 import select
 import Server
+import time
 
 F = 1
 NUM_OF_SERVERS = (3 * F) + 1
@@ -15,7 +16,8 @@ END_SESSION = 0
 STORE = 1
 RETRIEVE = 2
 P = 14447
-COMPLAINT = '0'
+COMPLAINT = 'c'
+SYNCED = 'd'
 OK = '3'
 OK2 = '4'
 ERROR = '0'
@@ -56,6 +58,8 @@ def node_vss(server, dealer):
     g_i = str2pol(values[0])
     h_i = str2pol(values[1])
     print('recieved polynomials from dealer')
+    print('g_i: ', g_i)
+    print('h_i: ', h_i)
 
     # todo check polynomial degrees if not F then polynomial is zeros
 
@@ -70,28 +74,27 @@ def node_vss(server, dealer):
     report = np.zeros(NUM_OF_SERVERS)
     report[server.get_id()-1] = True
     complaints = []
-    inputs = server.servers_out.values()
+    inputs = server.servers_in.values()
 
     while not report.all():
-        print('in while')
         readers, writers, xers = select.select(inputs, [], [])
         for j in readers:
             j, g_j_i, h_j_i = j.recv(BUFFER_SIZE).decode().split(DELIM_1)
             j, g_j_i, h_j_i = int(j), int(g_j_i), int(h_j_i)
             print('received values from server: ', str(j))
             report[j-1] = True
-            if g_j_i != g_i[j] or h_j_i != h_i[j]:
-                print('complaint on server: ', str(j))
+            if g_j_i != h_i[j] or h_j_i != g_i[j]:
                 complaints.append(j)
-            else:
-                print('synced with server: ', str(j))
+
+    print('received values from all nodes')
+    print('complained: ', complaints)
 
     # report status for each node
     status_mat = np.eye(NUM_OF_SERVERS)
     report_mat = np.eye(NUM_OF_SERVERS)
-    report_mat[:, server.get_id()] = True
+    report_mat[:, server.get_id()-1] = True
 
-    for i in range(1, NUM_OF_SERVERS):
+    for i in range(1, NUM_OF_SERVERS+1):
         if i == server.get_id():
             continue
         if i in complaints:
@@ -101,20 +104,21 @@ def node_vss(server, dealer):
             print('sent complaint server: ', str(i))
         else:
             status_mat[server.get_id()-1, i - 1] = True
-            data = str(i) + DELIM_2 + OK
+            data = str(i) + DELIM_2 + SYNCED
             server.broadcast.sendall(data.encode())
             print('sent synced server: ', str(i))
 
     while not report_mat.all():
         i, data = server.receive_broadcast(3)  # todo magic
+        print(i, data)
         j, stat = data.split(DELIM_2)
-        j, stat = int(j), int(stat)
+        j = int(j)
         report_mat[i-1, j-1] = True
-        if stat == OK:
-            print('heard synced server: ', str(i), 'print on server: ', str(j))
+        if stat == SYNCED:
+            print('heard synced server: ', str(i), ' on server: ', str(j))
             status_mat[i-1, j-1] = True
         else:
-            print('heard complaint server: ', str(i), 'print on server: ', str(j))
+            print('heard complaint server: ', str(i), ' on server: ', str(j))
             status_mat[i - 1, j - 1] = False
 
     # receive responses to complaints from dealer

@@ -119,7 +119,8 @@ class Server:
         pass
 
     def receive_broadcast(self, size=BUFFER_SIZE):
-        data = self.broadcast.recv(size).decode()
+        data = self.broadcast.recv(size+2).decode()
+        print(data)
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
