@@ -2,10 +2,6 @@ from Helper import *
 import socket
 import select
 
-BROADCAST_HOST = 'localhost'
-BROADCAST_PORT = 5566
-CLIENT_SENDER_ID = 0
-
 
 class BroadcastServer:
 

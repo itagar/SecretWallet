@@ -10,7 +10,7 @@ DELIM_1 = ','
 DELIM_2 = '~'
 SENDER_DELIM = '#'
 DISCOVER_IP = '127.0.0.1'
-DISCOVER_PORT = 5555
+DISCOVER_PORT = 4400
 END_SESSION = 0
 STORE = 1
 RETRIEVE = 2
@@ -25,6 +25,9 @@ FIN_SUCCESS = '7'
 FIN_FAILURE = '8'
 ENOUGH_OK1 = '9'
 VALUE_DIGITS = 5
+BROADCAST_HOST = 'localhost'
+BROADCAST_PORT = 4401
+CLIENT_SENDER_ID = 0
 
 
 def create_random_bivariate_polynomial(secret, deg):
@@ -70,6 +73,7 @@ def node_vss(server, dealer):
     inputs = server.servers_out.values()
 
     while not report.all():
+        print('in while')
         readers, writers, xers = select.select(inputs, [], [])
         for j in readers:
             j, g_j_i, h_j_i = j.recv(BUFFER_SIZE).decode().split(DELIM_1)

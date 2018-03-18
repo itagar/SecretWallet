@@ -13,7 +13,8 @@ class Server:
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', port))
-        print('welcome socket established.')
+        self.__welcome.listen(NUM_OF_SERVERS)
+        print('welcome socket established in ip:', socket.gethostbyname('localhost'), ' and port: ', str(port))
 
         # connect to discover server
         self.__discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -54,7 +55,6 @@ class Server:
     def __accept_servers(self):
         connections = 0
         while connections < NUM_OF_SERVERS-1:
-            self.__welcome.listen(NUM_OF_SERVERS-1)
             conn, address = self.__welcome.accept()
             cur_id = conn.recv(BUFFER_SIZE).decode()
             self.servers_in[cur_id] = conn
@@ -67,6 +67,7 @@ class Server:
             cur_id, cur_host, cur_port = address.split(DELIM_1)
             cur_id = int(cur_id)
             if cur_id != self.__id:
+                print(cur_id, cur_host, int(cur_port))
                 self.servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.servers_out[cur_id].connect((cur_host, int(cur_port)))
                 self.servers_out[cur_id].sendall(str(self.__id).encode())
