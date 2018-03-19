@@ -79,7 +79,7 @@ class Server:
 
         if request == STORE:
             print('client: ', client_id, ' wish to store.')
-            self.__store_session(client_socket, client_id)
+            self.__store_session(client_socket)
 
         elif request == RETRIEVE:
             print('client: ', client_id, ' wish to retrieve.')
@@ -90,22 +90,23 @@ class Server:
             client_socket.close()
 
     def handle_requests(self):
-        print('ready to accept clients')
         inputs = [self.__welcome, self.broadcast]
         while True:
+            print('ready to accept clients')
+            print('current secrets: ', self.__secrets)
             self.__welcome.listen(4)  # todo magic
             readable, writable, exceptional = select.select(inputs, [], inputs)  # todo check closing sockets
             for r in readable:
 
                 if r is self.__welcome:  # accept new clients
                     conn, address = self.__welcome.accept()
-                    cid = int(receive_msg(conn))  # todo magic
+                    cid = int(receive_msg(conn))
                     self.__clients[cid] = conn
                     print('connected to client: ', cid)
 
                 elif r is self.broadcast:  # new session
                     # get cid and request type
-                    data = self.receive_broadcast()[1].split(DELIM_1)  # todo magic
+                    data = self.receive_broadcast()[1].split(DELIM_1)
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -113,8 +114,11 @@ class Server:
                 else:  # todo close connection
                     pass
 
-    def __store_session(self, client_sock, client_id):
-        return node_vss(self, client_sock)
+    def __store_session(self, client_sock):
+        sender, name = self.receive_broadcast()  # todo check if name in library
+        poly_key = node_vss(self, client_sock)
+        poly_val = node_vss(self, client_sock)
+        self.__secrets[name] = poly_key[0][0], poly_val[0][0]
 
     def __retrieve_session(self, client_sock, client_id):
         pass

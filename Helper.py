@@ -16,16 +16,16 @@ END_SESSION = 0
 STORE = 1
 RETRIEVE = 2
 P = 14447
-COMPLAINT = 'c'
-SYNCED = 'd'
-OK = '3'
-OK2 = '4'
-ERROR = '0'
-FIN_COMPLAINTS = '5'
-FIN_OK1 = '6'
-FIN_SUCCESS = '7'
-FIN_FAILURE = '8'
-ENOUGH_OK1 = '9'
+COMPLAINT = 'COMPPLAINT'
+SYNCED = 'SUNCED'
+OK = 'OK1'
+OK2 = 'OK2'
+ERROR = 'ERR'
+FIN_COMPLAINTS = 'FIN_COMPLAINTS'
+FIN_OK1 = 'FIN_OK1'
+FIN_SUCCESS = 'FIN_SUCC'
+FIN_FAILURE = 'FIN_FAIL'
+ENOUGH_OK1 = 'ENOUGH_OK1'
 VALUE_DIGITS = 5
 BROADCAST_HOST = 'localhost'
 BROADCAST_PORT = 4401
@@ -38,8 +38,10 @@ def send_msg(sock, data):
 
 
 def receive_msg(sock):
-    length = int(sock.recv(3).decode())  # todo magic
-    data = sock.recv(length)
+    length = sock.recv(3).decode()  # todo magic
+    if not length:
+        return
+    data = sock.recv(int(length)).decode()
     return data
 
 
@@ -76,7 +78,7 @@ def node_vss(server, dealer):
 
     # send values to all servers
     for j in server.servers_out:
-        data = DELIM_1 + str(g_i[j]).zfill(VALUE_DIGITS) + DELIM_1 + str(h_i[j]).zfill(VALUE_DIGITS)
+        data = str(g_i[j]).zfill(VALUE_DIGITS) + DELIM_1 + str(h_i[j]).zfill(VALUE_DIGITS)
         server.send_to_server(j, data)
         print('sent values to server: ', str(j))
 
@@ -91,7 +93,8 @@ def node_vss(server, dealer):
         for r in readers:
             j = server.get_sid(r)
             if j > 0:
-                g_j_i, h_j_i = server.receive_from_server(j).split(DELIM_1)
+                data = server.receive_from_server(j)
+                g_j_i, h_j_i = data.split(DELIM_1)
                 g_j_i, h_j_i = int(g_j_i), int(h_j_i)
                 print('received values from server: ', str(j))
                 report[j-1] = True
@@ -104,7 +107,7 @@ def node_vss(server, dealer):
     # report status for each node
     status_mat = np.eye(NUM_OF_SERVERS)
     report_mat = np.eye(NUM_OF_SERVERS)
-    report_mat[:, server.get_id()-1] = True
+    report_mat[server.get_id()-1, :] = True
 
     for i in range(1, NUM_OF_SERVERS+1):
         if i == server.get_id():
@@ -160,7 +163,7 @@ def node_vss(server, dealer):
         ok_flag = False
     else:
         print('sent OK1')
-        ok_error_mat[server.get_id - 1] = True
+        ok_error_mat[server.get_id() - 1] = True
 
     server.send_broadcast(data)
 
@@ -256,7 +259,7 @@ def deal_vss(dealer, servers, broadcast, secret):
     while not np.all(report_mat):
         i, data = dealer.receive_broadcast()
         j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
-        j, status = int(j), int(status)
+        j = int(j)
         report_mat[i-1, j-1] = True
         print('received complaint status from: ', str(i), ' on: ', str(j))
         if status == COMPLAINT:  # add complaint
@@ -280,7 +283,6 @@ def deal_vss(dealer, servers, broadcast, secret):
     errors_sid = []
     while True:
         i, status = dealer.receive_broadcast()  # receive (i,OK) or (i,ERROR)
-        status = int(status)
         report_mat[i-1] = True
         if status == ERROR:
             print('node: ', str(i), ' sent ERROR1')
@@ -314,7 +316,6 @@ def deal_vss(dealer, servers, broadcast, secret):
 
     while True:
         i, status = dealer.receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
-        status = int(status)
         report_mat[i-1] = True
         if status == OK2:
             print('recieved OK2 from: ', str(i))

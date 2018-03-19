@@ -18,9 +18,6 @@ class Client:
         self.__broadcast = None
         self.__broadcast_address = (addresses[1].split(DELIM_1))
         self.__broadcast_address = (self.__broadcast_address[0], int(self.__broadcast_address[1]))
-        print('addresses: ', addresses)
-        print('broadcast: ', self.__broadcast_address)
-        print(type(self.__broadcast_address))
 
         # connect to servers
         self.__servers = {}
@@ -38,15 +35,15 @@ class Client:
     def store(self, name, key, value):
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', key, ', value=', value)
-        # self.send_broadcast(name)  # todo name already taken
-        if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
+        self.send_broadcast(name)  # todo name already taken
+        if deal_vss(self, self.__servers, self.__broadcast, key) == ERROR:
             print('error with storing key')
             self.__end_session()
-        #     return ERROR
-        # if deal_vss(self.__servers, self.__broadcast, value) == ERROR:
-        #     print('error with storing value')
-        #     self.__end_session()
-        #     return ERROR
+            return ERROR
+        if deal_vss(self, self.__servers, self.__broadcast, value) == ERROR:
+            print('error with storing value')
+            self.__end_session()
+            return ERROR
         print('store key,value successfully')
         self.__end_session()
         return OK
