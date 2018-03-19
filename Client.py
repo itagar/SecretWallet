@@ -8,7 +8,7 @@ class Client:
         # discover network
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((DISCOVER_IP, DISCOVER_PORT))
-        data = discover.recv(BUFFER_SIZE).decode()
+        data = receive_msg(discover)
         addresses = data.split(DELIM_2)
         self.__id = addresses[0]  # todo magic
         print('client: ', self.__id, ' discovered network')
@@ -29,7 +29,7 @@ class Client:
             cur_id = int(cur_id)
             self.__servers[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__servers[cur_id].connect((cur_ip, int(cur_port)))
-            self.__servers[cur_id].sendall(self.__id.encode())
+            self.send_to_server(cur_id, str(self.__id))
 
             print('client connected successfully to server: ', cur_id,
                   ' in ip: ', cur_ip, ' and port: ', cur_port)
@@ -38,7 +38,7 @@ class Client:
     def store(self, name, key, value):
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', key, ', value=', value)
-        # self.__broadcast.sendall(name)  # todo name already taken
+        # self.send_broadcast(name)  # todo name already taken
         if deal_vss(self.__servers, self.__broadcast, key) == ERROR:
             print('error with storing key')
             self.__end_session()
@@ -51,22 +51,31 @@ class Client:
         self.__end_session()
         return OK
 
+    def send_to_server(self, sid, data):
+        send_msg(self.__servers[sid], data)
+
+    def receive_from_server(self, sid):
+        receive_msg(self.__servers[sid])
+
+    def send_broadcast(self, data):
+        send_msg(self.__broadcast, data)
+
+    def receive_broadcast(self):
+        data = receive_msg(self.__broadcast)
+        sender, data = data.split(SENDER_DELIM)
+        return int(sender), data
+
     def retrieve(self, name, key):
         self.__start_session(RETRIEVE)
         print('start retrieve: name=', name,', key=', key)
         self.__end_session()
         pass
 
-    def __receive_broadcast(self, size=BUFFER_SIZE):
-        data = self.__broadcast.recv(size).decode()
-        sender, data = data.split(SENDER_DELIM)
-        return int(sender), data
-
     def __start_session(self, request_type):
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__broadcast.connect(self.__broadcast_address)
         data = self.__id + DELIM_1 + str(request_type)
-        self.__broadcast.sendall(data.encode())
+        self.send_broadcast(data)
 
     def __end_session(self):
         print('ended session')

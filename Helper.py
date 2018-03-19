@@ -32,6 +32,17 @@ BROADCAST_PORT = 4401
 CLIENT_SENDER_ID = 0
 
 
+def send_msg(sock, data):
+    length = str(len(data)).zfill(3)  # todo magic
+    sock.sendall((length + data).encode())
+
+
+def receive_msg(sock):
+    length = int(sock.recv(3).decode())  # todo magic
+    data = sock.recv(length)
+    return data
+
+
 def create_random_bivariate_polynomial(secret, deg):
     s = np.random.randint(low=1, high=P, size=[deg+1, deg+1], dtype=int)
     s[0][0] = secret
@@ -54,7 +65,7 @@ def str2pol(s):
 
 
 def node_vss(server, dealer):
-    values = dealer.recv(BUFFER_SIZE).decode().split(DELIM_2)
+    values = receive_msg(dealer).split(DELIM_2)
     g_i = str2pol(values[0])
     h_i = str2pol(values[1])
     print('recieved polynomials from dealer')
@@ -65,9 +76,8 @@ def node_vss(server, dealer):
 
     # send values to all servers
     for j in server.servers_out:
-        data = str(server.get_id()) + DELIM_1 + str(g_i[j]).zfill(VALUE_DIGITS) + DELIM_1 +\
-               str(h_i[j]).zfill(VALUE_DIGITS)
-        server.servers_out[j].sendall(data.encode())
+        data = DELIM_1 + str(g_i[j]).zfill(VALUE_DIGITS) + DELIM_1 + str(h_i[j]).zfill(VALUE_DIGITS)
+        server.send_to_server(j, data)
         print('sent values to server: ', str(j))
 
     # receive and check values from all servers
@@ -78,13 +88,15 @@ def node_vss(server, dealer):
 
     while not report.all():
         readers, writers, xers = select.select(inputs, [], [])
-        for j in readers:
-            j, g_j_i, h_j_i = j.recv(BUFFER_SIZE).decode().split(DELIM_1)
-            j, g_j_i, h_j_i = int(j), int(g_j_i), int(h_j_i)
-            print('received values from server: ', str(j))
-            report[j-1] = True
-            if g_j_i != h_i[j] or h_j_i != g_i[j]:
-                complaints.append(j)
+        for r in readers:
+            j = server.get_sid(r)
+            if j > 0:
+                g_j_i, h_j_i = server.receive_from_server(j).split(DELIM_1)
+                g_j_i, h_j_i = int(g_j_i), int(h_j_i)
+                print('received values from server: ', str(j))
+                report[j-1] = True
+                if g_j_i != h_i[j] or h_j_i != g_i[j]:
+                    complaints.append(j)
 
     print('received values from all nodes')
     print('complained: ', complaints)
@@ -100,17 +112,16 @@ def node_vss(server, dealer):
         if i in complaints:
             status_mat[server.get_id()-1, i-1] = False
             data = str(i) + DELIM_2 + COMPLAINT
-            server.broadcast.sendall(data.encode())
+            server.send_broadcast(data)
             print('sent complaint server: ', str(i))
         else:
             status_mat[server.get_id()-1, i - 1] = True
             data = str(i) + DELIM_2 + SYNCED
-            server.broadcast.sendall(data.encode())
+            server.send_broadcast(data)
             print('sent synced server: ', str(i))
 
     while not report_mat.all():
-        i, data = server.receive_broadcast(3)  # todo magic
-        print(i, data)
+        i, data = server.receive_broadcast()
         j, stat = data.split(DELIM_2)
         j = int(j)
         report_mat[i-1, j-1] = True
@@ -123,7 +134,7 @@ def node_vss(server, dealer):
 
     # receive responses to complaints from dealer
     while True:
-        data = server.receive_broadcast(15)[1]  # todo boom magic
+        data = server.receive_broadcast()[1]  # todo boom magic
         if data == FIN_COMPLAINTS:
             print('dealer finished complaint solving phase')
             break
@@ -151,14 +162,14 @@ def node_vss(server, dealer):
         print('sent OK1')
         ok_error_mat[server.get_id - 1] = True
 
-    server.broadcast.sendall(data.encode())
+    server.send_broadcast(data)
 
     # receive all OK or ERROR from all servers
     report_mat = np.zeros(NUM_OF_SERVERS)
     report_mat[server.get_id() - 1] = True
 
     while not np.all(report_mat):
-        i, data = server.receive_broadcast(1)
+        i, data = server.receive_broadcast()
         i = int(i)
         report_mat[i - 1] = True
         if data == OK:
@@ -168,14 +179,14 @@ def node_vss(server, dealer):
             print('heard ERROR1 from node: ', int(i))
 
     # case less then n-f OK's return the zero-polynomial
-    if np.nonzero(ok_error_mat) < (NUM_OF_SERVERS - F):
+    if np.count_nonzero(ok_error_mat) < (NUM_OF_SERVERS - F):
         print('heard less then n-f OK1 - commit to zero polynomial')
         return np.zeros(NUM_OF_SERVERS), np.zeros(NUM_OF_SERVERS)
 
     print('heard at least n-f OK1')
     # receive new shares for servers which did not send ok
     while True:
-        data = server.receive_broadcast(61)[1]  # todo magic
+        data = server.receive_broadcast()[1]  # todo magic
         if data == FIN_OK1:
             break
         j, g_j, h_j = data.split(DELIM_2)
@@ -199,15 +210,15 @@ def node_vss(server, dealer):
     if ok_flag and np.all(ok_error_mat):  # TODO check polynomial degree
         print('sent OK2')
         ok2_error_mat[server.get_id() - 1] = True
-        server.broadcast.sendall(OK2.encode())
+        server.send_broadcast(OK2)
 
     # case dealer didn't solve all complaints
     else:
-        server.broadcast.sendall(ERROR.encode())
+        server.send_broadcast(ERROR)
         print('sent OK2')
 
     while not np.all(report_mat):
-        i, data = server.receive_broadcast(1)
+        i, data = server.receive_broadcast()
         i = int(i)
         report_mat[i - 1] = True
         if data == OK2:
@@ -217,7 +228,7 @@ def node_vss(server, dealer):
             print('heard ERROR2 from: ', str(i))
 
     # at least n-f sent ok2 - success
-    if np.nonzero(ok2_error_mat) >= (NUM_OF_SERVERS - F):
+    if np.count_nonzero(ok2_error_mat) >= (NUM_OF_SERVERS - F):
         print('at least n-f OK2 - VSS success')
         return g_i, h_i
 
@@ -227,25 +238,25 @@ def node_vss(server, dealer):
         return np.zeros(NUM_OF_SERVERS), np.zeros(NUM_OF_SERVERS)
 
 
-def deal_vss(servers, broadcast, secret):
+def deal_vss(dealer, servers, broadcast, secret):
     s = create_random_bivariate_polynomial(secret, F)
     x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS+1), np.arange(0, NUM_OF_SERVERS+1))
     s_values = np.mod(polyval2d(x, y, s).astype(int), P)
 
-    for sid, server_sock in servers.items():
+    for sid in servers:
         g = s_values[sid, :]
         h = s_values[:, sid]
         data = poly2str(g) + DELIM_2 + poly2str(h)
-        server_sock.sendall(data.encode())
+        dealer.send_to_server(sid, data)
         print('deal polynomials to server: ', str(sid))
 
     # receive complaints
     report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
     complaints = []
     while not np.all(report_mat):
-        nodes, status = broadcast.recv(5).decode().split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
-        i, j = nodes.split(SENDER_DELIM)
-        i, j, status = int(i), int(j), int(status)
+        i, data = dealer.receive_broadcast()
+        j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
+        j, status = int(j), int(status)
         report_mat[i-1, j-1] = True
         print('received complaint status from: ', str(i), ' on: ', str(j))
         if status == COMPLAINT:  # add complaint
@@ -257,19 +268,19 @@ def deal_vss(servers, broadcast, secret):
         print('solved complaint of: ', i, ' on: ', j)
         data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]).zfill(VALUE_DIGITS)\
                + DELIM_1 + str(s_values[j, i]).zfill(VALUE_DIGITS)
-        broadcast.sendall(data.encode())
+        dealer.send_broadcast(data)
 
     # finished complaints resolving
     print('finished solving complaints')
     data = FIN_COMPLAINTS
-    broadcast.sendall(data.encode())
+    dealer.send_broadcast(data)
 
     # wait for OK
     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
     errors_sid = []
     while True:
-        i, status = broadcast.recv(3).decode().split(SENDER_DELIM)  # receive i#OK or i#ERROR  todo magic
-        i, status = int(i), int(status)
+        i, status = dealer.receive_broadcast()  # receive (i,OK) or (i,ERROR)
+        status = int(status)
         report_mat[i-1] = True
         if status == ERROR:
             print('node: ', str(i), ' sent ERROR1')
@@ -291,10 +302,10 @@ def deal_vss(servers, broadcast, secret):
         g_i = poly2str(s_values[sid, :])
         h_i = poly2str(s_values[:, sid])
         data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-        broadcast.sendall(data.encode())
+        dealer.send_broadcast(data)
 
     # finished broadcasting not ok's polynomials
-    broadcast.sendall(FIN_OK1.encode())
+    dealer.send_broadcast(FIN_OK1)
     print('finished broadcasting polynomials')
 
     # wait for OK2
@@ -302,8 +313,8 @@ def deal_vss(servers, broadcast, secret):
     status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
 
     while True:
-        i, status = broadcast.recv(3).decode().split(SENDER_DELIM)  # receive i#OK2 or i#ERROR  todo magic
-        i, status = int(i), int(status)
+        i, status = dealer.receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
+        status = int(status)
         report_mat[i-1] = True
         if status == OK2:
             print('recieved OK2 from: ', str(i))

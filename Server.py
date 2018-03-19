@@ -19,9 +19,10 @@ class Server:
         # connect to discover server
         self.__discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__discover.connect((discover_ip, discover_port))
-        self.__discover.sendall((socket.gethostbyname('localhost') + DELIM_1 + str(port)).encode())
+        discover_msg = socket.gethostbyname('localhost') + DELIM_1 + str(port)
+        send_msg(self.__discover, discover_msg)
         print('connected to discover server successfully.')
-        data = self.__discover.recv(BUFFER_SIZE).decode()
+        data = receive_msg(self.__discover)
 
         # connect to broadcast server
         self.__id, broadcast_host, broadcast_port = data.split(DELIM_1)
@@ -29,7 +30,7 @@ class Server:
         print('server id is: ' + str(self.__id))
         self.broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.broadcast.connect((broadcast_host, int(broadcast_port)))
-        self.broadcast.sendall(str(self.__id).encode())
+        self.send_broadcast(str(self.__id))
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
 
         # connect to other servers
@@ -56,13 +57,13 @@ class Server:
         connections = 0
         while connections < NUM_OF_SERVERS-1:
             conn, address = self.__welcome.accept()
-            cur_id = conn.recv(BUFFER_SIZE).decode()
+            cur_id = int(receive_msg(conn))
             self.servers_in[cur_id] = conn
             connections += 1
-            print('accepted connection from server: ' + cur_id)
+            print('accepted connection from server: ' + str(cur_id))
 
     def __connect_servers(self):
-        addresses = self.__discover.recv(BUFFER_SIZE).decode().split(DELIM_2)
+        addresses = receive_msg(self.__discover).split(DELIM_2)
         for address in addresses:
             cur_id, cur_host, cur_port = address.split(DELIM_1)
             cur_id = int(cur_id)
@@ -70,7 +71,7 @@ class Server:
                 print(cur_id, cur_host, int(cur_port))
                 self.servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.servers_out[cur_id].connect((cur_host, int(cur_port)))
-                self.servers_out[cur_id].sendall(str(self.__id).encode())
+                self.send_to_server(cur_id, str(self.__id))
                 print('connected to server: ' + str(cur_id))
 
     def __session(self, client_socket, client_id, request):
@@ -98,13 +99,13 @@ class Server:
 
                 if r is self.__welcome:  # accept new clients
                     conn, address = self.__welcome.accept()
-                    cid = int(conn.recv(2).decode())  # todo magic
+                    cid = int(receive_msg(conn))  # todo magic
                     self.__clients[cid] = conn
                     print('connected to client: ', cid)
 
                 elif r is self.broadcast:  # new session
                     # get cid and request type
-                    data = self.receive_broadcast(6)[1].split(DELIM_1)  # todo magic
+                    data = self.receive_broadcast()[1].split(DELIM_1)  # todo magic
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -118,11 +119,26 @@ class Server:
     def __retrieve_session(self, client_sock, client_id):
         pass
 
-    def receive_broadcast(self, size=BUFFER_SIZE):
-        data = self.broadcast.recv(size+2).decode()
-        print(data)
+    def get_sid(self, sock):
+        for sid, server_sock in self.servers_in.items():
+            if sock is server_sock:
+                return sid
+        return 0
+
+    def send_broadcast(self, data):
+        send_msg(self.broadcast, data)
+
+    def receive_broadcast(self):
+        data = receive_msg(self.broadcast)
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
+
+    def send_to_server(self, sid, data):
+        send_msg(self.servers_out[sid], data)
+
+    def receive_from_server(self, sid):
+        data = receive_msg(self.servers_in[sid])
+        return data
 
     def close(self):
         self.__welcome.close()

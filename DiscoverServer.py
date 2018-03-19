@@ -15,7 +15,7 @@ class DiscoverServer:
         self.__welcome.listen(1)
         print('waiting for broadcast server to connect')
         broadcast_socket, broadcast_address = self.__welcome.accept()
-        broadcast_host, broadcast_port = broadcast_socket.recv(BUFFER_SIZE).decode().split(DELIM_1)
+        broadcast_host, broadcast_port = receive_msg(broadcast_socket).split(DELIM_1)
         self.__broadcast_packet = broadcast_host + DELIM_1 + broadcast_port
         print(broadcast_address)
         print('broadcast packet: ', self.__broadcast_packet)
@@ -35,8 +35,9 @@ class DiscoverServer:
             self.__welcome.listen(4)
             conn, address = self.__welcome.accept()
             cur_id = str(connections + 1)
-            welcome_host, welcome_port = conn.recv(BUFFER_SIZE).decode().split(DELIM_1)
-            conn.sendall((cur_id + DELIM_1 + self.__broadcast_packet).encode())
+            welcome_host, welcome_port = receive_msg(conn).split(DELIM_1)
+            server_msg = cur_id + DELIM_1 + self.__broadcast_packet
+            send_msg(conn, server_msg)
             connections += 1
             servers.append(conn)
             print('connected successfully to server:' + cur_id + ' in ip: ' + address[0] +
@@ -48,7 +49,7 @@ class DiscoverServer:
 
         # send servers information about other servers
         for i, sock in enumerate(servers):
-            sock.sendall(self.__servers_packet.encode())
+            send_msg(sock, self.__servers_packet)
             sock.close()
             cur_id = str(i + 1)
             print('server: ' + cur_id + ' was discovered successfully and connection was closed')
@@ -61,8 +62,8 @@ class DiscoverServer:
             conn, address = self.__welcome.accept()
             # send to client all data required to connect to the system
             print('connected client: ', client_id)
-            data = str(client_id).zfill(2) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
-            conn.sendall(data.encode())
+            client_data = str(client_id).zfill(2) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
+            send_msg(conn, client_data)
             conn.close()
             print('discovered client: ', client_id, ' successfully')
             client_id += 1
