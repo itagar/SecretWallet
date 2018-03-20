@@ -36,17 +36,24 @@ class Client:
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', key, ', value=', value)
         self.send_broadcast(name)  # todo name already taken
-        if deal_vss(self, self.__servers, self.__broadcast, key) == ERROR:
+        if deal_vss(self, self.__servers, key) == ERROR:
             print('error with storing key')
             self.__end_session()
             return ERROR
-        if deal_vss(self, self.__servers, self.__broadcast, value) == ERROR:
+        if deal_vss(self, self.__servers, value) == ERROR:
             print('error with storing value')
             self.__end_session()
             return ERROR
         print('store key,value successfully')
         self.__end_session()
         return OK
+
+    def retrieve(self, name, key):
+        self.__start_session(RETRIEVE)
+        print('start retrieve: name=', name, ', key=', key)
+        self.send_broadcast(name)  # todo if name not in secrets
+        deal_vss(self, self.__servers, key)  # share key'
+        self.__end_session()
 
     def send_to_server(self, sid, data):
         send_msg(self.__servers[sid], data)
@@ -61,12 +68,6 @@ class Client:
         data = receive_msg(self.__broadcast)
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
-
-    def retrieve(self, name, key):
-        self.__start_session(RETRIEVE)
-        print('start retrieve: name=', name,', key=', key)
-        self.__end_session()
-        pass
 
     def __start_session(self, request_type):
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -90,14 +91,14 @@ if __name__ == '__main__':
     while True:
         request = input('what should i do next: ')
         if request == 'store':
-            secret_name, secret_key, secret_value = input('please insert: name key value').split()
+            secret_name, secret_key, secret_value = input('please insert: name key value ').split()
             client.store(secret_name, secret_key, secret_value)
         elif request == 'ret':
-            secret_name, secret_key = input('please insert: name key').split()
+            secret_name, secret_key = input('please insert: name key ').split()
             client.retrieve(secret_name, secret_key)
         elif request == 'exit':
             print('see you next time.')
             break
         else:
-            print('Invalid Usage')
+            print('Invalid Usage ')
     client.close()

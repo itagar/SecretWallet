@@ -2,6 +2,7 @@ from numpy.polynomial.polynomial import polyval2d
 import numpy as np
 import select
 import Server
+from threading import Thread, Lock
 import time
 
 F = 1
@@ -66,8 +67,13 @@ def str2pol(s):
     return p
 
 
-def node_vss(server, dealer):
-    values = receive_msg(dealer).split(DELIM_2)
+def node_vss(server, dealer=None):
+    if dealer:  # case dealer is not server
+        dealer.lock.aquire()
+        values = receive_msg(dealer).split(DELIM_2)
+        dealer.lock.release()
+    else:  # dealer is server
+        values = server.values  # todo maybe add values for client
     g_i = str2pol(values[0])
     h_i = str2pol(values[1])
     print('recieved polynomials from dealer')
@@ -241,10 +247,15 @@ def node_vss(server, dealer):
         return np.zeros(NUM_OF_SERVERS), np.zeros(NUM_OF_SERVERS)
 
 
-def deal_vss(dealer, servers, broadcast, secret):
+def deal_vss(dealer, servers, secret, is_server=False):
     s = create_random_bivariate_polynomial(secret, F)
     x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS+1), np.arange(0, NUM_OF_SERVERS+1))
     s_values = np.mod(polyval2d(x, y, s).astype(int), P)
+
+    # dealer is one of servers - pass the values to the node thread through values field
+    if is_server:
+        dealer.values = s_values[dealer.get_id(), :]
+        dealer.lock.release()
 
     for sid in servers:
         g = s_values[sid, :]
@@ -334,3 +345,10 @@ def deal_vss(dealer, servers, broadcast, secret):
     else:
         print('less then n-f OK2 - VSS failure')
         return ERROR
+
+
+def share_random_secret(server):
+    for i in range(1, NUM_OF_SERVERS+1):
+        if server.get_id() == i:
+            r_i = np.random.randint(1, P)
+            server.lock.aquire()

@@ -1,7 +1,7 @@
 import socket
 import select
 import random
-from threading import Thread
+from threading import Thread, Lock
 from Helper import *
 
 BUFFER_SIZE = 1024
@@ -40,6 +40,10 @@ class Server:
         self.__clients = {}
         self.__establish_servers_connection()
         self.__discover.close()
+
+        # for vss usage
+        self.lock = Lock()
+        self.values = None
 
     def get_id(self):
         return self.__id
@@ -116,12 +120,13 @@ class Server:
 
     def __store_session(self, client_sock):
         sender, name = self.receive_broadcast()  # todo check if name in library
-        poly_key = node_vss(self, client_sock)
-        poly_val = node_vss(self, client_sock)
-        self.__secrets[name] = poly_key[0][0], poly_val[0][0]
+        poly_k = node_vss(self, client_sock)
+        poly_v = node_vss(self, client_sock)
+        self.__secrets[name] = poly_k[0][0], poly_v[0][0]
 
     def __retrieve_session(self, client_sock, client_id):
-        pass
+        sender, name = self.receive_broadcast()  # todo check if name in library
+        ploy_d = node_vss(self, client_sock)
 
     def get_sid(self, sock):
         for sid, server_sock in self.servers_in.items():
