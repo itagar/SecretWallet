@@ -18,7 +18,7 @@ STORE = 1
 RETRIEVE = 2
 P = 14447
 COMPLAINT = 'COMPPLAINT'
-SYNCED = 'SUNCED'
+SYNCED = 'SYNCED'
 OK = 'OK1'
 OK2 = 'OK2'
 ERROR = 'ERR'
@@ -31,6 +31,7 @@ VALUE_DIGITS = 5
 BROADCAST_HOST = 'localhost'
 BROADCAST_PORT = 4401
 CLIENT_SENDER_ID = 0
+SEND_TO_SELF = '@'
 
 
 def send_msg(sock, data):
@@ -67,15 +68,14 @@ def str2pol(s):
     return p
 
 
-def node_vss(server, dealer=None):
-    if dealer:  # case dealer is not server
-        dealer.lock.aquire()
+def node_vss(server, dealer, is_dealer=False):
+    if is_dealer:  # case dealer is server
+        with server.lock:
+            g_i, h_i = server.pipe  # todo maybe add values for client
+    else:  # dealer is not server
         values = receive_msg(dealer).split(DELIM_2)
-        dealer.lock.release()
-    else:  # dealer is server
-        values = server.values  # todo maybe add values for client
-    g_i = str2pol(values[0])
-    h_i = str2pol(values[1])
+        g_i = str2pol(values[0])
+        h_i = str2pol(values[1])
     print('recieved polynomials from dealer')
     print('g_i: ', g_i)
     print('h_i: ', h_i)
@@ -121,12 +121,12 @@ def node_vss(server, dealer=None):
         if i in complaints:
             status_mat[server.get_id()-1, i-1] = False
             data = str(i) + DELIM_2 + COMPLAINT
-            server.send_broadcast(data)
+            server.send_broadcast(data, is_dealer)
             print('sent complaint server: ', str(i))
         else:
             status_mat[server.get_id()-1, i - 1] = True
             data = str(i) + DELIM_2 + SYNCED
-            server.send_broadcast(data)
+            server.send_broadcast(data, is_dealer)
             print('sent synced server: ', str(i))
 
     while not report_mat.all():
@@ -171,7 +171,7 @@ def node_vss(server, dealer=None):
         print('sent OK1')
         ok_error_mat[server.get_id() - 1] = True
 
-    server.send_broadcast(data)
+    server.send_broadcast(data, is_dealer)
 
     # receive all OK or ERROR from all servers
     report_mat = np.zeros(NUM_OF_SERVERS)
@@ -219,11 +219,11 @@ def node_vss(server, dealer=None):
     if ok_flag and np.all(ok_error_mat):  # TODO check polynomial degree
         print('sent OK2')
         ok2_error_mat[server.get_id() - 1] = True
-        server.send_broadcast(OK2)
+        server.send_broadcast(OK2, is_dealer)
 
     # case dealer didn't solve all complaints
     else:
-        server.send_broadcast(ERROR)
+        server.send_broadcast(ERROR, is_dealer)
         print('sent OK2')
 
     while not np.all(report_mat):
@@ -254,7 +254,7 @@ def deal_vss(dealer, servers, secret, is_server=False):
 
     # dealer is one of servers - pass the values to the node thread through values field
     if is_server:
-        dealer.values = s_values[dealer.get_id(), :]
+        dealer.pipe = s_values[dealer.get_id(), :], s_values[:, dealer.get_id()]
         dealer.lock.release()
 
     for sid in servers:
@@ -282,12 +282,12 @@ def deal_vss(dealer, servers, secret, is_server=False):
         print('solved complaint of: ', i, ' on: ', j)
         data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]).zfill(VALUE_DIGITS)\
                + DELIM_1 + str(s_values[j, i]).zfill(VALUE_DIGITS)
-        dealer.send_broadcast(data)
+        dealer.send_broadcast(data, is_server)
 
     # finished complaints resolving
     print('finished solving complaints')
     data = FIN_COMPLAINTS
-    dealer.send_broadcast(data)
+    dealer.send_broadcast(data, is_server)
 
     # wait for OK
     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
@@ -315,10 +315,10 @@ def deal_vss(dealer, servers, secret, is_server=False):
         g_i = poly2str(s_values[sid, :])
         h_i = poly2str(s_values[:, sid])
         data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-        dealer.send_broadcast(data)
+        dealer.send_broadcast(data, is_server)
 
     # finished broadcasting not ok's polynomials
-    dealer.send_broadcast(FIN_OK1)
+    dealer.send_broadcast(FIN_OK1, is_server)
     print('finished broadcasting polynomials')
 
     # wait for OK2
@@ -348,7 +348,16 @@ def deal_vss(dealer, servers, secret, is_server=False):
 
 
 def share_random_secret(server):
-    for i in range(1, NUM_OF_SERVERS+1):
+    p_i = 0
+    for i in range(1, 2):
         if server.get_id() == i:
-            r_i = np.random.randint(1, P)
-            server.lock.aquire()
+            print('try to acquire random')
+            server.lock.acquire()
+            print('aquired random')
+            t = Thread(target=deal_vss, args=(server, server.servers_out, np.random.randint(1, P), True))
+            t.start()
+            p_i += node_vss(server, None, True)
+            t.join()
+        else:
+            p_i += node_vss(server, server.servers_in[i])
+    return p_i

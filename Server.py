@@ -43,7 +43,7 @@ class Server:
 
         # for vss usage
         self.lock = Lock()
-        self.values = None
+        self.pipe = None
 
     def get_id(self):
         return self.__id
@@ -94,7 +94,7 @@ class Server:
             client_socket.close()
 
     def handle_requests(self):
-        inputs = [self.__welcome, self.broadcast]
+        inputs = [self.__welcome, self.broadcast]  # todo disconnect clients
         while True:
             print('ready to accept clients')
             print('current secrets: ', self.__secrets)
@@ -125,8 +125,33 @@ class Server:
         self.__secrets[name] = poly_k[0][0], poly_v[0][0]
 
     def __retrieve_session(self, client_sock, client_id):
-        sender, name = self.receive_broadcast()  # todo check if name in library
-        ploy_d = node_vss(self, client_sock)
+        # sender, name = self.receive_broadcast()  # todo check if name in library
+        # q_k_i, q_v_i = self.__secrets[name]
+        # q_d_i = node_vss(self, client_sock)
+        p_i = share_random_secret(server)
+        print(p_i)
+        # R_i = (q_k_i - q_d_i) * p_i
+
+        # send value of R_i to all servers
+        # self.send_broadcast(str(R_i))
+
+        # receive values of R_j from all other servers
+        # report_mat = np.zeros(NUM_OF_SERVERS)
+        # report_mat[self.__id] = True
+        # X = np.arange(1, NUM_OF_SERVERS+1)
+        # Y = np.zeros(NUM_OF_SERVERS)
+        # Y[self.__id-1] = R_i
+        # while not report_mat.all():
+        #     j, R_j = self.receive_broadcast()
+        #     report_mat[j-1] = True
+        #     Y[j-1] = int(R_j)
+
+        # interpolate R and retrieve key if R(0)=0
+        R = np.polyfit(X, Y, F)
+        if R[0] == 0:
+            send_msg(client_sock, OK + DELIM_2 + str(q_k_i))
+        else:
+            send_msg(client_sock, ERROR + DELIM_2)
 
     def get_sid(self, sock):
         for sid, server_sock in self.servers_in.items():
@@ -134,7 +159,9 @@ class Server:
                 return sid
         return 0
 
-    def send_broadcast(self, data):
+    def send_broadcast(self, data, send_to_self=False):
+        if send_to_self:
+            data = SEND_TO_SELF + data
         send_msg(self.broadcast, data)
 
     def receive_broadcast(self):

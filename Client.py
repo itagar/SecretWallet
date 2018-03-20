@@ -51,8 +51,11 @@ class Client:
     def retrieve(self, name, key):
         self.__start_session(RETRIEVE)
         print('start retrieve: name=', name, ', key=', key)
-        self.send_broadcast(name)  # todo if name not in secrets
-        deal_vss(self, self.__servers, key)  # share key'
+        # self.send_broadcast(name)  # todo if name not in secrets
+        # deal_vss(self, self.__servers, key)  # share key'
+        # response_mat = np.zeros(NUM_OF_SERVERS)
+        # while not response_mat.all():
+        #     pass
         self.__end_session()
 
     def send_to_server(self, sid, data):
@@ -61,7 +64,9 @@ class Client:
     def receive_from_server(self, sid):
         receive_msg(self.__servers[sid])
 
-    def send_broadcast(self, data):
+    def send_broadcast(self, data, send_to_self=False):
+        if send_to_self:
+            data = SEND_TO_SELF + data
         send_msg(self.__broadcast, data)
 
     def receive_broadcast(self):
