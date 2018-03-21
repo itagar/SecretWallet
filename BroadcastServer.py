@@ -35,14 +35,10 @@ class BroadcastServer:
         return 0
 
     def broadcast(self, sender_id, sender_sock, data):
-        flag = False
         data = str(sender_id) + SENDER_DELIM + data
-        if data.startswith(SEND_TO_SELF):  # broadcast also to self
-            data = data[1:]
-            flag = True
         print('send broadcast: ', data)
         for sock in self.__outputs:
-            if sock is not sender_sock or flag:
+            if sock is not sender_sock:
                 send_msg(sock, data)
 
     def handle(self):
