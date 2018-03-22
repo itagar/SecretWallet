@@ -117,7 +117,6 @@ class Client:
 
     def close(self):
         print('client closed connection')
-        self.__start_session(END_SESSION)
         for sid in self.__servers:
             self.__servers[sid].close()
 

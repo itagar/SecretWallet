@@ -94,7 +94,7 @@ class Server:
             client_socket.close()
 
     def handle_requests(self):
-        inputs = [self.__welcome, self.broadcast]  # todo disconnect clients
+        inputs = [self.__welcome, self.broadcast]  # todo disconnect servers
         while True:
             print('ready to accept clients')
             print('current secrets: ', self.__secrets)
@@ -106,6 +106,7 @@ class Server:
                     conn, address = self.__welcome.accept()
                     cid = int(receive_msg(conn))
                     self.__clients[cid] = conn
+                    inputs.append(conn)
                     print('connected to client: ', cid)
 
                 elif r is self.broadcast:  # new session
@@ -115,8 +116,13 @@ class Server:
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
 
-                else:  # todo close connection
-                    pass
+                # remove clients in exit
+                elif r in self.__clients.values():
+                    inputs.remove(r)
+                    cid = self.get_cid(r)
+                    print('removed client: ', cid)
+                    del self.__clients[cid]
+                    r.close()
 
     def __store_session(self, client_sock):
         sender, name = self.receive_broadcast()  # todo check if name in library
@@ -164,6 +170,12 @@ class Server:
         for sid, server_sock in self.servers_in.items():
             if sock is server_sock:
                 return sid
+        return 0
+
+    def get_cid(self, sock):
+        for cid, client_sock in self.__clients.items():
+            if sock is client_sock:
+                return cid
         return 0
 
     def send_broadcast(self, data):
