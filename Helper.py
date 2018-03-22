@@ -18,6 +18,7 @@ END_SESSION = 0
 STORE = 1
 RETRIEVE = 2
 P = 14447
+VALUE_DIGITS = 5
 COMPLAINT = 'COMPLAINT'
 SYNCED = 'SYNCED'
 OK = 'OK1'
@@ -28,7 +29,6 @@ FIN_OK1 = 'FIN_OK1'
 FIN_SUCCESS = 'FIN_SUCC'
 FIN_FAILURE = 'FIN_FAIL'
 ENOUGH_OK1 = 'ENOUGH_OK1'
-VALUE_DIGITS = 5
 BROADCAST_HOST = 'localhost'
 BROADCAST_PORT = 4401
 CLIENT_SENDER_ID = 0
@@ -56,7 +56,7 @@ def create_random_bivariate_polynomial(secret, deg):
 def poly2str(p):
     data = ''
     for i in p:
-        data += str(i).zfill(VALUE_DIGITS) + DELIM_1
+        data += str(i) + DELIM_1
     return data[:-1]
 
 
@@ -74,15 +74,13 @@ def robust_interpolation(x, y, deg):
     best = None
     for indices in combinations(range(len(x)), deg+1):
         x_cur, y_cur = x[list(indices)], y[list(indices)]
-        p[indices] = np.mod(np.around(lagrange(x_cur, y_cur).coef).astype(int), P)
+        p[indices] = np.around(lagrange(x_cur, y_cur).coef).astype(int)
     for indices in p:
-        values = np.mod(np.polyval(p[indices], x), P)
+        values = np.polyval(p[indices], x)
         inliers = np.count_nonzero((values - y) == 0)
         if inliers > max_votes:
             best = p[indices]
             max_votes = inliers
     return best
 
-# 9646
 
-print(np.mod(8612+9588+5299+10449, P))

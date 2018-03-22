@@ -72,6 +72,7 @@ class BroadcastServer:
                         self.__inputs.remove(r)
                         self.__outputs.remove(r)
                         r.close()
+                        print('removed client: ', str(client_id), ' from broadcast')
                         busy = False
                     else:  # client send message
                         self.broadcast(CLIENT_SENDER_ID, r, data)

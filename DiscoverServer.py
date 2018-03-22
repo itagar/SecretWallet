@@ -62,7 +62,7 @@ class DiscoverServer:
             conn, address = self.__welcome.accept()
             # send to client all data required to connect to the system
             print('connected client: ', client_id)
-            client_data = str(client_id).zfill(2) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
+            client_data = str(client_id) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
             send_msg(conn, client_data)
             conn.close()
             print('discovered client: ', client_id, ' successfully')

@@ -32,9 +32,18 @@ class Client:
                   ' in ip: ', cur_ip, ' and port: ', cur_port)
         print('client connected successfully to all servers')
 
+    def get_sid(self, sock):
+        for sid, server_sock in self.__servers.items():
+            if sock is server_sock:
+                return sid
+        return 0
+
     def store(self, name, key, value):
+        # modify to range
+        key = int(key) % P
+        value = int(value) % P
         self.__start_session(STORE)
-        print('start store: name=', name, ', key=', key, ', value=', value)
+        print('start store: name=', name, ', key=', str(key), ', value=', str(value))
         self.send_broadcast(name)  # todo name already taken
         if self.deal_vss(key) == ERROR:
             print('error with storing key')
@@ -49,20 +58,44 @@ class Client:
         return OK
 
     def retrieve(self, name, key):
+        # modify to range
+        key = int(key) % P
         self.__start_session(RETRIEVE)
-        print('start retrieve: name=', name, ', key=', key)
+        print('start retrieve: name=', name, ', key=', str(key))
         self.send_broadcast(name)  # todo if name not in secrets
         self.deal_vss(key)  # share q_d of secret key'
         response_mat = np.zeros(NUM_OF_SERVERS)
+        X = []
+        Y = []
+        inputs = list(self.__servers.values())
+        inputs.append(self.__broadcast)
         while not response_mat.all():
-            pass
+            readers, writers, xers = select.select(inputs, [], inputs)
+            for r in readers:
+                if r is self.__broadcast:
+                    self.receive_broadcast()
+                else:
+                    i = self.get_sid(r)
+                    response_mat[i-1] = True
+                    status, value = self.receive_from_server(i).split(DELIM_2)
+                    if status == OK:
+                        print('got value from node: ', str(i))
+                        X.append(i)
+                        Y.append(int(value))
+                    else:
+                        print('got error from node: ', str(i))
         self.__end_session()
+        if len(X) > (NUM_OF_SERVERS - F):
+            q = robust_interpolation(np.array(X), np.array(Y), F)
+            return np.polyval(q, 0)
+        else:
+            return
 
     def send_to_server(self, sid, data):
         send_msg(self.__servers[sid], data)
 
     def receive_from_server(self, sid):
-        receive_msg(self.__servers[sid])
+        return receive_msg(self.__servers[sid])
 
     def send_broadcast(self, data):
         send_msg(self.__broadcast, data)
@@ -91,7 +124,7 @@ class Client:
     def deal_vss(self, secret):
         s = create_random_bivariate_polynomial(secret, F)
         x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
-        s_values = np.mod(polyval2d(x, y, s).astype(int), P)
+        s_values = polyval2d(x, y, s).astype(int)
 
         for sid in self.__servers:
             g = s_values[sid, :]
@@ -116,8 +149,7 @@ class Client:
         for i, j in complaints:
             # broadcast i,j~S(i,j),S(j,i)
             print('solved complaint of: ', i, ' on: ', j)
-            data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]).zfill(VALUE_DIGITS) \
-                   + DELIM_1 + str(s_values[j, i]).zfill(VALUE_DIGITS)
+            data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
             self.send_broadcast(data)
 
         # finished complaints resolving
@@ -192,7 +224,12 @@ if __name__ == '__main__':
             client.store(secret_name, secret_key, secret_value)
         elif request == 'ret':
             secret_name, secret_key = input('please insert: name key ').split()
-            client.retrieve(secret_name, secret_key)
+            value = client.retrieve(secret_name, secret_key)
+            if value:
+                print('correct key - value is: ', value)
+            else:
+                print('incorrect key', value)
+
         elif request == 'exit':
             print('see you next time.')
             break

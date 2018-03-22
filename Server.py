@@ -128,8 +128,8 @@ class Server:
         sender, name = self.receive_broadcast()  # todo check if name in library
         q_k_i, q_v_i = self.__secrets[name]
         q_d_i = self.node_vss(client_sock)
-        x_i, y_i, p_i = self.share_random_secret()
-        R_i = np.mod(np.mod((q_k_i - q_d_i), P) * np.mod(p_i, P), P)
+        # p_i = self.share_random_secret()
+        R_i = q_k_i - q_d_i
 
         # send value of R_i to all servers
         self.send_broadcast(str(R_i))
@@ -150,13 +150,15 @@ class Server:
         print('Y:', Y)
         R = robust_interpolation(X, Y, F)
         print('R:', R)
-        print('R(0)', np.mod(np.polyval(R, 0), P))
-        # if R[0] == 0:
-        #     print('key authenticated - sending q_v_i to client')
-        #     send_msg(client_sock, OK + DELIM_2 + str(q_k_i))
-        # else:
-        #     print('invalid key - send error to client')
-        #     send_msg(client_sock, ERROR + DELIM_2)
+        R_0 = np.polyval(R, 0)
+        print('R(0)', R_0)
+
+        if R_0 == 0:
+            print('key authenticated - sending q_v_i to client')
+            send_msg(client_sock, OK + DELIM_2 + str(q_v_i))
+        else:
+            print('invalid key - send error to client')
+            send_msg(client_sock, ERROR + DELIM_2 + '#')
 
     def get_sid(self, sock):
         for sid, server_sock in self.servers_in.items():
@@ -201,7 +203,7 @@ class Server:
         # send values to all servers
         for j in self.servers_out:
             if j != dealer_id:  # todo
-                data = str(g_i[j]).zfill(VALUE_DIGITS) + DELIM_1 + str(h_i[j]).zfill(VALUE_DIGITS)
+                data = str(g_i[j]) + DELIM_1 + str(h_i[j])
                 self.send_to_server(j, data)
                 print('sent values to server: ', str(j))
 
@@ -385,7 +387,7 @@ class Server:
     def deal_vss(self, secret):
         s = create_random_bivariate_polynomial(secret, F)
         x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
-        s_values = np.mod(polyval2d(x, y, s).astype(int), P)
+        s_values = polyval2d(x, y, s).astype(int)
 
         for sid in self.servers_out:
             g = s_values[sid, :]
@@ -415,8 +417,7 @@ class Server:
         for i, j in complaints:
             # broadcast i,j~S(i,j),S(j,i)
             print('solved complaint of: ', i, ' on: ', j)
-            data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]).zfill(VALUE_DIGITS) \
-                   + DELIM_1 + str(s_values[j, i]).zfill(VALUE_DIGITS)
+            data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
             self.send_broadcast(data)
 
         # finished complaints resolving
@@ -487,16 +488,17 @@ class Server:
 
     def share_random_secret(self):
         p_i = 0
-        for j in range(1, 3):
+        for j in range(1, 2):
             if server.get_id() == j:
                 print('dealing random')
-                r_i = np.random.randint(1, P)
+                # r_i = np.random.randint(1, P)
+                r_i = j
                 print('r_i:' + str(r_i))
-                p_i = np.mod(p_i + self.deal_vss(r_i), P)
+                p_i += self.deal_vss(r_i)
             else:
                 print('receiving random from: ', str(j))
-                p_i = np.mod(p_i + self.node_vss(self.servers_in[j], j), P)
-        return np.mod(p_i, P)
+                p_i += self.node_vss(self.servers_in[j], j)
+        return p_i
 
 
 if __name__ == '__main__':
