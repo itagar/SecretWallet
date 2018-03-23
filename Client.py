@@ -1,16 +1,21 @@
-import socket
 from Helper import *
 
 
 class Client:
+    """
+    an object represents a Client in the SecretWallet system
+    """
 
     def __init__(self):
+        """
+        constructor for Client object
+        """
         # discover network
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((DISCOVER_IP, DISCOVER_PORT))
         data = receive_msg(discover)
         addresses = data.split(DELIM_2)
-        self.__id = addresses[0]  # todo magic
+        self.__id = addresses[0]
         print('client: ', self.__id, ' discovered network')
         discover.close()
 
@@ -26,37 +31,52 @@ class Client:
             cur_id = int(cur_id)
             self.__servers[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.__servers[cur_id].connect((cur_ip, int(cur_port)))
-            self.send_to_server(cur_id, str(self.__id))
+            self.__send_to_server(cur_id, str(self.__id))
 
             print('client connected successfully to server: ', cur_id,
                   ' in ip: ', cur_ip, ' and port: ', cur_port)
         print('client connected successfully to all servers')
 
-    def get_sid(self, sock):
+    def __get_sid(self, sock):
+        """
+        return the sid
+        :param sock: a socket
+        :return: the sid associated with the given socket or 0 if not in servers
+        """
         for sid, server_sock in self.__servers.items():
             if sock is server_sock:
                 return sid
         return 0
 
     def store(self, name, key, value):
+        """
+        Stores a secret in the system
+        :param name: secret title
+        :param key: secret key - decimal number
+        :param value: secret value - decimal number
+        :return: one of the following:
+        DECIMAL_ERR - incase key or value are not decimal
+        NAME_ALREADY_TAKEN - in case name already in use
+        OK - otherwise
+        """
         if not key.isdecimal():
             print('key has to be a number')
-            return
+            return DECIMAL_ERR
         if not value.isdecimal():
             print('value has to be an number')
-            return
+            return DECIMAL_ERR
         # modify to range
         key = int(key) % P
         value = int(value) % P
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', str(key), ', value=', str(value))
-        self.send_broadcast(name)
+        self.__send_broadcast(name)
 
         # check if name already taken
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.receive_broadcast()
+            i, status = self.__receive_broadcast()
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -64,34 +84,39 @@ class Client:
         # less then N-F have place for name in secrets
         if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
             print(NAME_ALREADY_TAKEN)
-            return
+            return NAME_ALREADY_TAKEN
 
-        if self.deal_vss(key) == ERROR:
-            print('error with storing key')
-            self.__end_session()
-            return ERROR
-        if self.deal_vss(value) == ERROR:
-            print('error with storing value')
-            self.__end_session()
-            return ERROR
+        self.__deal_vss(key)
+        self.__deal_vss(value)
         print('store key,value successfully')
         self.__end_session()
         return OK
 
     def retrieve(self, name, key):
+        """
+        Retrieves a secret from system
+        :param name: name of the stored secret
+        :param key: key of the stored secret - decimal
+        :return: one of the following:
+        DECIMAL_ERR - in case key is not a decimal
+        INVALID_NAME_ERR - in case name already in use
+        INVALID_KEY_ERR - in case the key is invalid
+        otherwise - returns the value of the stored secret - int
+        """
         if not key.isdecimal():
             print('key has to be a number')
-            return None
+            return DECIMAL_ERR
         # modify to range
         key = int(key) % P
         self.__start_session(RETRIEVE)
         print('start retrieve: name=', name, ', key=', str(key))
-        self.send_broadcast(name)  # todo if name not in secrets
+        self.__send_broadcast(name)
 
+        # check if name in secrets
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.receive_broadcast()
+            i, status = self.__receive_broadcast()
             response_mat[i-1] = True
             if status == OK:
                 status_mat[i-1] = True
@@ -100,7 +125,7 @@ class Client:
         if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
             return INVALID_NAME_ERR
 
-        self.deal_vss(key)  # share q_d of secret key'
+        self.__deal_vss(key)  # share q_d of secret key'
         response_mat = np.zeros(NUM_OF_SERVERS)
         X = []
         Y = []
@@ -110,11 +135,11 @@ class Client:
             readers, writers, xers = select.select(inputs, [], inputs)
             for r in readers:
                 if r is self.__broadcast:
-                    self.receive_broadcast()
+                    self.__receive_broadcast()
                 else:
-                    i = self.get_sid(r)
+                    i = self.__get_sid(r)
                     response_mat[i-1] = True
-                    status, value = self.receive_from_server(i).split(DELIM_2)
+                    status, value = self.__receive_from_server(i).split(DELIM_2)
                     if status == OK:
                         print('got value from node: ', str(i))
                         X.append(i)
@@ -128,36 +153,74 @@ class Client:
         else:
             return INVALID_KEY_ERR
 
-    def send_to_server(self, sid, data):
+    def __send_to_server(self, sid, data):
+        """
+        sends message to server
+        :param sid: server id
+        :param data: data you wish to send
+        :return: None
+        """
         send_msg(self.__servers[sid], data)
 
-    def receive_from_server(self, sid):
+    def __receive_from_server(self, sid):
+        """
+        receive message from server
+        :param sid: server id
+        :return: data received from server
+        """
         return receive_msg(self.__servers[sid])
 
-    def send_broadcast(self, data):
+    def __send_broadcast(self, data):
+        """
+        sends broadcast message
+        :param data: data you wish to broadcast
+        :return: None
+        """
         send_msg(self.__broadcast, data)
 
-    def receive_broadcast(self):
+    def __receive_broadcast(self):
+        """
+        receives message from broadcast
+        :return: data received from broadcast channel
+        """
         data = receive_msg(self.__broadcast)
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
     def __start_session(self, request_type):
+        """
+        Start session for storing or retrieving secrets
+        :param request_type: STORE or RETRIEVE
+        :return: None
+        """
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__broadcast.connect(self.__broadcast_address)
         data = self.__id + DELIM_1 + str(request_type)
-        self.send_broadcast(data)
+        self.__send_broadcast(data)
 
     def __end_session(self):
+        """
+        close session
+        :return: None
+        """
         print('ended session')
-        self.__broadcast.close()
+        self.__broadcast.exit()
 
-    def close(self):
+    def exit(self):
+        """
+        exit from system
+        :return: None
+        """
         print('client closed connection')
         for sid in self.__servers:
-            self.__servers[sid].close()
+            self.__servers[sid].exit()
 
-    def deal_vss(self, secret):
+    def __deal_vss(self, secret):
+        """
+        Deals secret according to VSS protocol
+        :param secret: Secret you wish to store - integer
+        :return: OK in case everything went well or ERROR otherwise
+        """
         s = create_random_bivariate_polynomial(secret, F)
         x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
         s_values = polyval2d(x, y, s).astype(int)
@@ -166,14 +229,14 @@ class Client:
             g = s_values[sid, :]
             h = s_values[:, sid]
             data = poly2str(g) + DELIM_2 + poly2str(h)
-            self.send_to_server(sid, data)
+            self.__send_to_server(sid, data)
             print('deal polynomials to server: ', str(sid))
 
         # receive complaints
         report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
         complaints = []
         while not np.all(report_mat):
-            i, data = self.receive_broadcast()
+            i, data = self.__receive_broadcast()
             j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
             j = int(j)
             report_mat[i - 1, j - 1] = True
@@ -186,18 +249,18 @@ class Client:
             # broadcast i,j~S(i,j),S(j,i)
             print('solved complaint of: ', i, ' on: ', j)
             data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
-            self.send_broadcast(data)
+            self.__send_broadcast(data)
 
         # finished complaints resolving
         print('finished solving complaints')
         data = FIN_COMPLAINTS
-        self.send_broadcast(data)
+        self.__send_broadcast(data)
 
         # wait for OK
         report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
         errors_sid = []
         while True:
-            i, status = self.receive_broadcast()  # receive (i,OK) or (i,ERROR)
+            i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
             report_mat[i - 1] = True
             if status == ERROR:
                 print('node: ', str(i), ' sent ERROR1')
@@ -219,10 +282,10 @@ class Client:
             g_i = poly2str(s_values[sid, :])
             h_i = poly2str(s_values[:, sid])
             data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-            self.send_broadcast(data)
+            self.__send_broadcast(data)
 
         # finished broadcasting not ok's polynomials
-        self.send_broadcast(FIN_OK1)
+        self.__send_broadcast(FIN_OK1)
         print('finished broadcasting polynomials')
 
         # wait for OK2
@@ -230,7 +293,7 @@ class Client:
         status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
 
         while True:
-            i, status = self.receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
+            i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
             report_mat[i - 1] = True
             if status == OK2:
                 print('recieved OK2 from: ', str(i))
@@ -273,4 +336,4 @@ if __name__ == '__main__':
             break
         else:
             print('Invalid Usage ')
-    client.close()
+    client.exit()

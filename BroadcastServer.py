@@ -52,8 +52,8 @@ class BroadcastServer:
         client_id = -1
 
         while True:
-            self.__welcome.listen(4)  # todo magic
-            readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)  # todo check writing
+            self.__welcome.listen(NUM_OF_SERVERS)
+            readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)
 
             for r in readable:
 
@@ -71,26 +71,18 @@ class BroadcastServer:
                     if not data:  # client closed connection
                         self.__inputs.remove(r)
                         self.__outputs.remove(r)
-                        r.close()
+                        r.exit()
                         print('removed client: ', str(client_id), ' from broadcast')
                         busy = False
                     else:  # client send message
                         self.broadcast(CLIENT_SENDER_ID, r, data)
                 else:  # get info from servers.
                     data = receive_msg(r)
-                    self.broadcast(self.__get_sid(r), r, data)  # todo magic
-
-            for s in exceptional:  # todo check if works
-                # Stop listening for input on the connection
-                self.__inputs.remove(s)
-                self.__outputs.remove(s)
-                print('closed connection with client: ' + str(client_id))
-                s.close()
-                busy = False
+                    self.broadcast(self.__get_sid(r), r, data)
 
     def close(self):
         for sid in self.__servers:
-            self.__servers[sid].close()
+            self.__servers[sid].exit()
         self.__welcome.close()
 
 

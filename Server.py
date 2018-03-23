@@ -91,15 +91,15 @@ class Server:
 
         else:
             print('session with client: ', client_id, ' closed successfully.')
-            client_socket.close()
+            client_socket.exit()
 
     def handle_requests(self):
-        inputs = [self.__welcome, self.broadcast]  # todo disconnect servers
+        inputs = [self.__welcome, self.broadcast]
         while True:
             print('ready to accept clients')
             print('current secrets: ', self.__secrets)
-            self.__welcome.listen(4)  # todo magic
-            readable, writable, exceptional = select.select(inputs, [], inputs)  # todo check closing sockets
+            self.__welcome.listen(NUM_OF_SERVERS)
+            readable, writable, exceptional = select.select(inputs, [], inputs)
             for r in readable:
 
                 if r is self.__welcome:  # accept new clients
@@ -122,10 +122,10 @@ class Server:
                     cid = self.get_cid(r)
                     print('removed client: ', cid)
                     del self.__clients[cid]
-                    r.close()
+                    r.exit()
 
     def __store_session(self, client_sock):
-        sender, name = self.receive_broadcast()  # todo check if name in library
+        sender, name = self.receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name not in self.__secrets:
             self.send_broadcast(OK)
@@ -151,7 +151,7 @@ class Server:
         self.__secrets[name] = q_k_i, q_v_i
 
     def __retrieve_session(self, client_sock, client_id):
-        sender, name = self.receive_broadcast()  # todo check if name in library
+        sender, name = self.receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name in self.__secrets:
             self.send_broadcast(OK)
@@ -238,9 +238,9 @@ class Server:
         self.__discover.close()
         self.broadcast.close()
         for sid in self.servers_in:
-            self.servers_in[sid].close()
+            self.servers_in[sid].exit()
         for sid in self.servers_out:
-            self.servers_out[sid].close()
+            self.servers_out[sid].exit()
 
     def node_vss(self, dealer, dealer_id=CLIENT_SENDER_ID):
         values = receive_msg(dealer).split(DELIM_2)
@@ -326,7 +326,7 @@ class Server:
 
         # receive responses to complaints from dealer
         while True:
-            data = self.receive_broadcast()[1]  # todo boom magic
+            data = self.receive_broadcast()[1]
             if data == FIN_COMPLAINTS:
                 print('dealer finished complaint solving phase')
                 break
@@ -387,7 +387,7 @@ class Server:
         # receive new shares for servers which did not send ok
         honest_dealer_flag = True
         while True:
-            data = self.receive_broadcast()[1]  # todo magic
+            data = self.receive_broadcast()[1]
             if data == FIN_OK1:
                 break
             j, g_j, h_j = data.split(DELIM_2)
@@ -562,7 +562,7 @@ class Server:
 
 
 if __name__ == '__main__':
-    welcome_port = random.randint(6000, 8000)  # todo change port assignment to discover
+    welcome_port = random.randint(6000, 10000)  # todo change port assignment to discover
     server = Server(welcome_port, DISCOVER_IP, DISCOVER_PORT)
     server.handle_requests()
     server.close()

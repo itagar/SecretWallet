@@ -20,7 +20,7 @@ class DiscoverServer:
         print(broadcast_address)
         print('broadcast packet: ', self.__broadcast_packet)
         print('connected successfully to broadcast server')
-        broadcast_socket.close()
+        broadcast_socket.exit()
         print('broadcast discovered successfully and connection was closed')
 
         # now wait for servers to connect
@@ -50,7 +50,7 @@ class DiscoverServer:
         # send servers information about other servers
         for i, sock in enumerate(servers):
             send_msg(sock, self.__servers_packet)
-            sock.close()
+            sock.exit()
             cur_id = str(i + 1)
             print('server: ' + cur_id + ' was discovered successfully and connection was closed')
 
@@ -58,13 +58,13 @@ class DiscoverServer:
         print('ready to accept clients')
         client_id = 1
         while True:
-            self.__welcome.listen(4)  # todo magic
+            self.__welcome.listen(NUM_OF_SERVERS)
             conn, address = self.__welcome.accept()
             # send to client all data required to connect to the system
             print('connected client: ', client_id)
             client_data = str(client_id) + DELIM_2 + self.__broadcast_packet + DELIM_2 + self.__servers_packet
             send_msg(conn, client_data)
-            conn.close()
+            conn.exit()
             print('discovered client: ', client_id, ' successfully')
             client_id += 1
 

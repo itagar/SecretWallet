@@ -3,6 +3,7 @@ import numpy as np
 import select
 from threading import Thread
 import time
+import socket
 from scipy.interpolate import lagrange
 from itertools import combinations
 
@@ -33,17 +34,19 @@ BROADCAST_HOST = 'localhost'
 INVALID_NAME_ERR = 'Name not in DB'
 INVALID_KEY_ERR = 'Invalid Key'
 NAME_ALREADY_TAKEN = 'Name already in use'
+DECIMAL_ERR = 'Key and value has to be decimal'
 BROADCAST_PORT = 4401
 CLIENT_SENDER_ID = 0
+MESSAGE_LENGTH_DIGITS = 3
 
 
 def send_msg(sock, data):
-    length = str(len(data)).zfill(3)  # todo magic
+    length = str(len(data)).zfill(MESSAGE_LENGTH_DIGITS)
     sock.sendall((length + data).encode())
 
 
 def receive_msg(sock):
-    length = sock.recv(3).decode()  # todo magic
+    length = sock.recv(MESSAGE_LENGTH_DIGITS).decode()
     if not length:
         return
     data = sock.recv(int(length)).decode()
