@@ -30,6 +30,9 @@ FIN_SUCCESS = 'FIN_SUCC'
 FIN_FAILURE = 'FIN_FAIL'
 ENOUGH_OK1 = 'ENOUGH_OK1'
 BROADCAST_HOST = 'localhost'
+INVALID_NAME_ERR = 'Name not in DB'
+INVALID_KEY_ERR = 'Invalid Key'
+NAME_ALREADY_TAKEN = 'Name already in use'
 BROADCAST_PORT = 4401
 CLIENT_SENDER_ID = 0
 
@@ -82,5 +85,25 @@ def robust_interpolation(x, y, deg):
             best = p[indices]
             max_votes = inliers
     return best
+
+
+def find_degree(y_array):
+    if np.all(np.array(y_array) == y_array[0]):
+        return 0
+    deg = 1
+    prev_array = y_array
+    while True:
+        diff_array = []
+        for i in range(len(prev_array) - 1):
+            diff_array.append(prev_array[i+1] - prev_array[i])
+        prev_array = diff_array
+        diff_array = np.array(diff_array)
+        if np.all(diff_array == diff_array[0]):  # if all diffs equals
+            break
+        deg += 1
+
+    return deg
+
+
 
 

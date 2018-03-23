@@ -39,12 +39,33 @@ class Client:
         return 0
 
     def store(self, name, key, value):
+        if not key.isdecimal():
+            print('key has to be a number')
+            return
+        if not value.isdecimal():
+            print('value has to be an number')
+            return
         # modify to range
         key = int(key) % P
         value = int(value) % P
         self.__start_session(STORE)
         print('start store: name=', name, ', key=', str(key), ', value=', str(value))
-        self.send_broadcast(name)  # todo name already taken
+        self.send_broadcast(name)
+
+        # check if name already taken
+        response_mat = np.zeros(NUM_OF_SERVERS)
+        status_mat = np.zeros(NUM_OF_SERVERS)
+        while not response_mat.all():
+            i, status = self.receive_broadcast()
+            response_mat[i - 1] = True
+            if status == OK:
+                status_mat[i - 1] = True
+
+        # less then N-F have place for name in secrets
+        if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
+            print(NAME_ALREADY_TAKEN)
+            return
+
         if self.deal_vss(key) == ERROR:
             print('error with storing key')
             self.__end_session()
@@ -58,11 +79,27 @@ class Client:
         return OK
 
     def retrieve(self, name, key):
+        if not key.isdecimal():
+            print('key has to be a number')
+            return None
         # modify to range
         key = int(key) % P
         self.__start_session(RETRIEVE)
         print('start retrieve: name=', name, ', key=', str(key))
         self.send_broadcast(name)  # todo if name not in secrets
+
+        response_mat = np.zeros(NUM_OF_SERVERS)
+        status_mat = np.zeros(NUM_OF_SERVERS)
+        while not response_mat.all():
+            i, status = self.receive_broadcast()
+            response_mat[i-1] = True
+            if status == OK:
+                status_mat[i-1] = True
+
+        # less then N-F have name in secrets
+        if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
+            return INVALID_NAME_ERR
+
         self.deal_vss(key)  # share q_d of secret key'
         response_mat = np.zeros(NUM_OF_SERVERS)
         X = []
@@ -89,7 +126,7 @@ class Client:
             q = robust_interpolation(np.array(X), np.array(Y), F)
             return np.polyval(q, 0)
         else:
-            return
+            return INVALID_KEY_ERR
 
     def send_to_server(self, sid, data):
         send_msg(self.__servers[sid], data)
@@ -224,10 +261,12 @@ if __name__ == '__main__':
         elif request == 'ret':
             secret_name, secret_key = input('please insert: name key ').split()
             value = client.retrieve(secret_name, secret_key)
-            if value:
-                print('correct key - value is: ', value)
+            if value == INVALID_NAME_ERR:
+                print(secret_name, ' is not in database')
+            elif value == INVALID_KEY_ERR:
+                print(INVALID_KEY_ERR)
             else:
-                print('incorrect key', value)
+                print('correct key - value is: ', value)
 
         elif request == 'exit':
             print('see you next time.')

@@ -126,12 +126,52 @@ class Server:
 
     def __store_session(self, client_sock):
         sender, name = self.receive_broadcast()  # todo check if name in library
+        status_mat = np.zeros(NUM_OF_SERVERS)
+        if name not in self.__secrets:
+            self.send_broadcast(OK)
+            status_mat[self.__id - 1] = True
+        else:
+            self.send_broadcast(NAME_ALREADY_TAKEN)
+
+        response_mat = np.zeros(NUM_OF_SERVERS)
+        response_mat[self.__id - 1] = True
+        while not response_mat.all():
+            i, status = self.receive_broadcast()
+            response_mat[i - 1] = True
+            if status == OK:
+                status_mat[i - 1] = True
+
+        # less then N-F have name in secrets
+        if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
+            print('name: ', name, ' is already in use')
+            return NAME_ALREADY_TAKEN
+
         q_k_i = self.node_vss(client_sock)
         q_v_i = self.node_vss(client_sock)
         self.__secrets[name] = q_k_i, q_v_i
 
     def __retrieve_session(self, client_sock, client_id):
         sender, name = self.receive_broadcast()  # todo check if name in library
+        status_mat = np.zeros(NUM_OF_SERVERS)
+        if name in self.__secrets:
+            self.send_broadcast(OK)
+            status_mat[self.__id - 1] = True
+        else:
+            self.send_broadcast(INVALID_NAME_ERR)
+
+        response_mat = np.zeros(NUM_OF_SERVERS)
+        response_mat[self.__id - 1] = True
+        while not response_mat.all():
+            i, status = self.receive_broadcast()
+            response_mat[i - 1] = True
+            if status == OK:
+                status_mat[i - 1] = True
+
+        # less then N-F have name in secrets
+        if np.count_nonzero(status_mat) < (NUM_OF_SERVERS - F):
+            print('name: ', name, ' not in secrets')
+            return INVALID_NAME_ERR
+
         q_k_i, q_v_i = self.__secrets[name]
         q_d_i = self.node_vss(client_sock)
         # p_i = self.share_random_secret()
@@ -210,7 +250,11 @@ class Server:
         print('g_i: ', g_i)
         print('h_i: ', h_i)
 
-        # todo check polynomial degrees if not F then polynomial is zeros
+        # check polynomial degrees are F - if not switch to zero polynomial
+        if find_degree(g_i) != F:
+            g_i = np.zeros(NUM_OF_SERVERS + 1)
+        if find_degree(h_i) != F:
+            h_i = np.zeros(NUM_OF_SERVERS + 1)
 
         # send values to all servers
         for j in self.servers_out:
@@ -302,17 +346,18 @@ class Server:
         if dealer_id:  # todo
             ok_error_mat[dealer_id - 1] = True
 
-        # TODO - are_polynomes_ok = check_polynom_deg(g_i, h_i)
         data = OK
         ok_flag = True
 
-        if not np.all(status_mat):  # if all complaints were solved
+        # if all complaints were solved and polynomials are of degree F send OK1
+        if np.all(status_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
+            print('sent OK1')
+            ok_error_mat[self.get_id() - 1] = True
+
+        else:
             data = ERROR
             print('sent ERROR1')
             ok_flag = False
-        else:
-            print('sent OK1')
-            ok_error_mat[self.get_id() - 1] = True
 
         self.send_broadcast(data)
 
@@ -340,6 +385,7 @@ class Server:
 
         print('heard at least n-f OK1')
         # receive new shares for servers which did not send ok
+        honest_dealer_flag = True
         while True:
             data = self.receive_broadcast()[1]  # todo magic
             if data == FIN_OK1:
@@ -349,6 +395,8 @@ class Server:
             ok_error_mat[j - 1] = True
             g_j = str2pol(g_j)
             h_j = str2pol(h_j)
+            if find_degree(g_j) != F or find_degree(h_j) != F:
+                honest_dealer_flag = False
             if self.get_id == j:
                 g_i = g_j
                 h_i = h_j
@@ -365,8 +413,8 @@ class Server:
             report_mat[dealer_id - 1] = True
             ok2_error_mat[dealer_id - 1] = True
 
-        # case solve all complaints
-        if ok_flag and np.all(ok_error_mat):  # TODO check polynomial degree
+        # case solve all complaints and my polynomials are of degree F and dealer responded with degree F polynomials
+        if ok_flag and honest_dealer_flag and np.all(ok_error_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
             print('sent OK2')
             ok2_error_mat[self.get_id() - 1] = True
             self.send_broadcast(OK2)
