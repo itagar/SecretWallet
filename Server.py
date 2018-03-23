@@ -9,7 +9,7 @@ BUFFER_SIZE = 1024
 
 class Server:
 
-    def __init__(self, port, discover_ip, discover_port):
+    def __init__(self, port, is_byzantine=False):
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', port))
@@ -18,7 +18,7 @@ class Server:
 
         # connect to discover server
         self.__discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__discover.connect((discover_ip, discover_port))
+        self.__discover.connect((DISCOVER_IP, DISCOVER_PORT))
         discover_msg = socket.gethostbyname('localhost') + DELIM_1 + str(port)
         send_msg(self.__discover, discover_msg)
         print('connected to discover server successfully.')
@@ -28,22 +28,21 @@ class Server:
         self.__id, broadcast_host, broadcast_port = data.split(DELIM_1)
         self.__id = int(self.__id)
         print('server id is: ' + str(self.__id))
-        self.broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.broadcast.connect((broadcast_host, int(broadcast_port)))
-        self.send_broadcast(str(self.__id))
+        self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.__broadcast.connect((broadcast_host, int(broadcast_port)))
+        self.__send_broadcast(str(self.__id))
         print('server' + str(self.__id) + ' connected to broadcast server successfully.')
 
         # connect to other servers
-        self.servers_out = {}
-        self.servers_in = {}
+        self.__servers_out = {}
+        self.__servers_in = {}
         self.__secrets = {}
         self.__clients = {}
         self.__establish_servers_connection()
         self.__discover.close()
 
-        # for vss usage
-        self.lock = Lock()
-        self.pipe = None
+        # is the server byzantine
+        self.__is_byzantine = is_byzantine
 
     def get_id(self):
         return self.__id
@@ -62,7 +61,7 @@ class Server:
         while connections < NUM_OF_SERVERS-1:
             conn, address = self.__welcome.accept()
             cur_id = int(receive_msg(conn))
-            self.servers_in[cur_id] = conn
+            self.__servers_in[cur_id] = conn
             connections += 1
             print('accepted connection from server: ' + str(cur_id))
 
@@ -73,9 +72,9 @@ class Server:
             cur_id = int(cur_id)
             if cur_id != self.__id:
                 print(cur_id, cur_host, int(cur_port))
-                self.servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.servers_out[cur_id].connect((cur_host, int(cur_port)))
-                self.send_to_server(cur_id, str(self.__id))
+                self.__servers_out[cur_id] = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.__servers_out[cur_id].connect((cur_host, int(cur_port)))
+                self.__send_to_server(cur_id, str(self.__id))
                 print('connected to server: ' + str(cur_id))
 
     def __session(self, client_socket, client_id, request):
@@ -91,10 +90,10 @@ class Server:
 
         else:
             print('session with client: ', client_id, ' closed successfully.')
-            client_socket.exit()
+            client_socket.close()
 
     def handle_requests(self):
-        inputs = [self.__welcome, self.broadcast]
+        inputs = [self.__welcome, self.__broadcast]
         while True:
             print('ready to accept clients')
             print('current secrets: ', self.__secrets)
@@ -109,9 +108,9 @@ class Server:
                     inputs.append(conn)
                     print('connected to client: ', cid)
 
-                elif r is self.broadcast:  # new session
+                elif r is self.__broadcast:  # new session
                     # get cid and request type
-                    data = self.receive_broadcast()[1].split(DELIM_1)
+                    data = self.__receive_broadcast()[1].split(DELIM_1)
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
@@ -119,24 +118,24 @@ class Server:
                 # remove clients in exit
                 elif r in self.__clients.values():
                     inputs.remove(r)
-                    cid = self.get_cid(r)
+                    cid = self.__get_cid(r)
                     print('removed client: ', cid)
                     del self.__clients[cid]
-                    r.exit()
+                    r.close()
 
     def __store_session(self, client_sock):
-        sender, name = self.receive_broadcast()
+        sender, name = self.__receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name not in self.__secrets:
-            self.send_broadcast(OK)
+            self.__send_broadcast(OK)
             status_mat[self.__id - 1] = True
         else:
-            self.send_broadcast(NAME_ALREADY_TAKEN)
+            self.__send_broadcast(NAME_ALREADY_TAKEN)
 
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.receive_broadcast()
+            i, status = self.__receive_broadcast()
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -146,23 +145,23 @@ class Server:
             print('name: ', name, ' is already in use')
             return NAME_ALREADY_TAKEN
 
-        q_k_i = self.node_vss(client_sock)
-        q_v_i = self.node_vss(client_sock)
+        q_k_i = self.__node_vss(client_sock)
+        q_v_i = self.__node_vss(client_sock)
         self.__secrets[name] = q_k_i, q_v_i
 
     def __retrieve_session(self, client_sock, client_id):
-        sender, name = self.receive_broadcast()
+        sender, name = self.__receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name in self.__secrets:
-            self.send_broadcast(OK)
+            self.__send_broadcast(OK)
             status_mat[self.__id - 1] = True
         else:
-            self.send_broadcast(INVALID_NAME_ERR)
+            self.__send_broadcast(INVALID_NAME_ERR)
 
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.receive_broadcast()
+            i, status = self.__receive_broadcast()
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -173,12 +172,12 @@ class Server:
             return INVALID_NAME_ERR
 
         q_k_i, q_v_i = self.__secrets[name]
-        q_d_i = self.node_vss(client_sock)
+        q_d_i = self.__node_vss(client_sock)
         # p_i = self.share_random_secret()
         R_i = q_k_i - q_d_i
 
         # send value of R_i to all servers
-        self.send_broadcast(str(R_i))
+        self.__send_broadcast(str(R_i))
 
         # receive values of R_j from all other servers
         report_mat = np.zeros(NUM_OF_SERVERS)
@@ -187,7 +186,7 @@ class Server:
         Y = np.zeros(NUM_OF_SERVERS)
         Y[self.__id-1] = R_i
         while not report_mat.all():
-            j, R_j = self.receive_broadcast()
+            j, R_j = self.__receive_broadcast()
             report_mat[j-1] = True
             Y[j-1] = int(R_j)
 
@@ -206,43 +205,45 @@ class Server:
             print('invalid key - send error to client')
             send_msg(client_sock, ERROR + DELIM_2 + '#')
 
-    def get_sid(self, sock):
-        for sid, server_sock in self.servers_in.items():
+    def __get_sid(self, sock):
+        for sid, server_sock in self.__servers_in.items():
             if sock is server_sock:
                 return sid
         return 0
 
-    def get_cid(self, sock):
+    def __get_cid(self, sock):
         for cid, client_sock in self.__clients.items():
             if sock is client_sock:
                 return cid
         return 0
 
-    def send_broadcast(self, data):
-        send_msg(self.broadcast, data)
+    def __send_broadcast(self, data):
+        send_msg(self.__broadcast, data)
 
-    def receive_broadcast(self):
-        data = receive_msg(self.broadcast)
+    def __receive_broadcast(self):
+        data = receive_msg(self.__broadcast)
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
-    def send_to_server(self, sid, data):
-        send_msg(self.servers_out[sid], data)
+    def __send_to_server(self, sid, data):
+        send_msg(self.__servers_out[sid], data)
 
-    def receive_from_server(self, sid):
-        data = receive_msg(self.servers_in[sid])
+    def __receive_from_server(self, sid):
+        data = receive_msg(self.__servers_in[sid])
         return data
 
     def close(self):
         self.__welcome.close()
         self.__discover.close()
-        self.broadcast.close()
-        for sid in self.servers_in:
-            self.servers_in[sid].exit()
-        for sid in self.servers_out:
-            self.servers_out[sid].exit()
+        self.__broadcast.close()
+        for sid in self.__servers_in:
+            self.__servers_in[sid].close()
+        for sid in self.__servers_out:
+            self.__servers_out[sid].close()
 
-    def node_vss(self, dealer, dealer_id=CLIENT_SENDER_ID):
+    def __node_vss(self, dealer, dealer_id=CLIENT_SENDER_ID):
+        # in case byzantine - randomly decide if to do harm
+        harm = np.random.choice([True, False])
         values = receive_msg(dealer).split(DELIM_2)
         g_i = str2pol(values[0])
         h_i = str2pol(values[1])
@@ -250,17 +251,25 @@ class Server:
         print('g_i: ', g_i)
         print('h_i: ', h_i)
 
-        # check polynomial degrees are F - if not switch to zero polynomial
-        if find_degree(g_i) != F:
-            g_i = np.zeros(NUM_OF_SERVERS + 1)
-        if find_degree(h_i) != F:
-            h_i = np.zeros(NUM_OF_SERVERS + 1)
+        if harm and self.__is_byzantine:
+            print('server wants to harm - random ')
+            g_i = np.random.randint(0, P, NUM_OF_SERVERS + 1)
+            h_i = np.random.randint(0, P, NUM_OF_SERVERS + 1)
+
+        else:
+            # check polynomial degrees are F - if not switch to zero polynomial
+            if find_degree(g_i) != F:
+                print('invalid values - degree of induced polynomials is not F')
+                g_i = np.zeros(NUM_OF_SERVERS + 1)
+            if find_degree(h_i) != F:
+                print('invalid values - degree of induced polynomials is not F')
+                h_i = np.zeros(NUM_OF_SERVERS + 1)
 
         # send values to all servers
-        for j in self.servers_out:
+        for j in self.__servers_out:
             if j != dealer_id:  # todo
                 data = str(g_i[j]) + DELIM_1 + str(h_i[j])
-                self.send_to_server(j, data)
+                self.__send_to_server(j, data)
                 print('sent values to server: ', str(j))
 
         # receive and check values from all servers
@@ -269,14 +278,14 @@ class Server:
         if dealer_id:  # todo
             report[dealer_id - 1] = True
         complaints = []
-        inputs = self.servers_in.values()
+        inputs = self.__servers_in.values()
 
         while not report.all():
             readers, writers, xers = select.select(inputs, [], [])
             for r in readers:
-                j = self.get_sid(r)
+                j = self.__get_sid(r)
                 if j > 0:
-                    data = self.receive_from_server(j)
+                    data = self.__receive_from_server(j)
                     g_j_i, h_j_i = data.split(DELIM_1)
                     g_j_i, h_j_i = int(g_j_i), int(h_j_i)
                     print('received values from server: ', str(j))
@@ -304,16 +313,16 @@ class Server:
             if i in complaints:
                 status_mat[self.get_id() - 1, i - 1] = False
                 data = str(i) + DELIM_2 + COMPLAINT
-                self.send_broadcast(data)
+                self.__send_broadcast(data)
                 print('sent complaint server: ', str(i))
             else:
                 status_mat[self.get_id() - 1, i - 1] = True
                 data = str(i) + DELIM_2 + SYNCED
-                self.send_broadcast(data)
+                self.__send_broadcast(data)
                 print('sent synced server: ', str(i))
 
         while not report_mat.all():
-            i, data = self.receive_broadcast()
+            i, data = self.__receive_broadcast()
             j, stat = data.split(DELIM_2)
             j = int(j)
             report_mat[i - 1, j - 1] = True
@@ -326,19 +335,27 @@ class Server:
 
         # receive responses to complaints from dealer
         while True:
-            data = self.receive_broadcast()[1]
+            data = self.__receive_broadcast()[1]
             if data == FIN_COMPLAINTS:
                 print('dealer finished complaint solving phase')
                 break
             nodes, vals = data.split(DELIM_2)
             i, j = nodes.split(DELIM_1)
             i, j = int(i), int(j)
-            print('dealer broadcast: ', str(i), ' and: ', str(j), ' values')
+            print('dealer broadcast: ', str(i), ' and: ', str(j), ' values: ', vals)
             status_mat[i - 1, j - 1] = True
-            if i == self.get_id() or j == self.get_id():  # update my values if necessary
-                g_i_j, h_i_j = vals.split(DELIM_1)
-                g_i[j] = int(h_i_j)
-                h_i[j] = int(g_i_j)
+            g_i_j, h_i_j = vals.split(DELIM_1)
+            if j == self.__id:  # update my values if necessary
+                print('updated g_i and h_i')
+                g_i[i] = int(h_i_j)
+                h_i[i] = int(g_i_j)
+            elif i == self.__id:
+                print('updated g_i and h_i')
+                g_i[j] = int(g_i_j)
+                h_i[j] = int(h_i_j)
+
+        print('after complaints g_i: ', g_i)
+        print('after complaints h_i: ', h_i)
 
         # decide if send ok or not
         ok_error_mat = np.zeros(NUM_OF_SERVERS)
@@ -351,15 +368,14 @@ class Server:
 
         # if all complaints were solved and polynomials are of degree F send OK1
         if np.all(status_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
-            print('sent OK1')
             ok_error_mat[self.get_id() - 1] = True
-
+            print('sent OK1')
         else:
             data = ERROR
             print('sent ERROR1')
             ok_flag = False
 
-        self.send_broadcast(data)
+        self.__send_broadcast(data)
 
         # receive all OK or ERROR from all servers
         report_mat = np.zeros(NUM_OF_SERVERS)
@@ -369,7 +385,7 @@ class Server:
             report_mat[dealer_id - 1] = True
 
         while not np.all(report_mat):
-            i, data = self.receive_broadcast()
+            i, data = self.__receive_broadcast()
             i = int(i)
             report_mat[i - 1] = True
             if data == OK:
@@ -387,7 +403,7 @@ class Server:
         # receive new shares for servers which did not send ok
         honest_dealer_flag = True
         while True:
-            data = self.receive_broadcast()[1]
+            data = self.__receive_broadcast()[1]
             if data == FIN_OK1:
                 break
             j, g_j, h_j = data.split(DELIM_2)
@@ -396,13 +412,14 @@ class Server:
             g_j = str2pol(g_j)
             h_j = str2pol(h_j)
             if find_degree(g_j) != F or find_degree(h_j) != F:
+                print('dishonest dealer')
                 honest_dealer_flag = False
             if self.get_id == j:
                 g_i = g_j
                 h_i = h_j
             else:
-                g_i[j] = g_j[self.get_id()]
-                h_i[j] = h_j[self.get_id()]
+                g_i[j] = h_j[self.get_id()]
+                h_i[j] = g_j[self.get_id()]
 
         # decide if send OK2
         report_mat = np.zeros(NUM_OF_SERVERS)
@@ -417,15 +434,16 @@ class Server:
         if ok_flag and honest_dealer_flag and np.all(ok_error_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
             print('sent OK2')
             ok2_error_mat[self.get_id() - 1] = True
-            self.send_broadcast(OK2)
+            self.__send_broadcast(OK2)
 
         # case dealer didn't solve all complaints
         else:
-            self.send_broadcast(ERROR)
-            print('sent OK2')
+            self.__send_broadcast(ERROR)
+            print('sent ERROR2')
 
         while not np.all(report_mat):
-            i, data = self.receive_broadcast()
+            i, data = self.__receive_broadcast()
+            print("data: ERROR2 or OK2 from i", data,' ', i)
             i = int(i)
             report_mat[i - 1] = True
             if data == OK2:
@@ -433,6 +451,9 @@ class Server:
                 ok2_error_mat[i - 1] = True
             else:
                 print('heard ERROR2 from: ', str(i))
+
+        if self.__is_byzantine and harm:
+            return np.random.randint(0, P)
 
         # at least n-f sent ok2 - success
         if np.count_nonzero(ok2_error_mat) >= (NUM_OF_SERVERS - F):
@@ -449,11 +470,11 @@ class Server:
         x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
         s_values = polyval2d(x, y, s).astype(int)
 
-        for sid in self.servers_out:
+        for sid in self.__servers_out:
             g = s_values[sid, :]
             h = s_values[:, sid]
             data = poly2str(g) + DELIM_2 + poly2str(h)
-            self.send_to_server(sid, data)
+            self.__send_to_server(sid, data)
             print('deal polynomials to server: ', str(sid))
 
         # receive complaints
@@ -465,7 +486,7 @@ class Server:
         report_mat[:, self.__id - 1] = True
 
         while not np.all(report_mat):
-            i, data = self.receive_broadcast()
+            i, data = self.__receive_broadcast()
             j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
             j = int(j)
             report_mat[i - 1, j - 1] = True
@@ -478,19 +499,19 @@ class Server:
             # broadcast i,j~S(i,j),S(j,i)
             print('solved complaint of: ', i, ' on: ', j)
             data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
-            self.send_broadcast(data)
+            self.__send_broadcast(data)
 
         # finished complaints resolving
         print('finished solving complaints')
         data = FIN_COMPLAINTS
-        self.send_broadcast(data)
+        self.__send_broadcast(data)
 
         # wait for OK
         report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
         report_mat[self.__id - 1] = True  # todo
         errors_sid = []
         while True:
-            i, status = self.receive_broadcast()  # receive (i,OK) or (i,ERROR)
+            i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
             report_mat[i - 1] = True
             if status == ERROR:
                 print('node: ', str(i), ' sent ERROR1')
@@ -512,10 +533,10 @@ class Server:
             g_i = poly2str(s_values[sid, :])
             h_i = poly2str(s_values[:, sid])
             data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-            self.send_broadcast(data)
+            self.__send_broadcast(data)
 
         # finished broadcasting not ok's polynomials
-        self.send_broadcast(FIN_OK1)
+        self.__send_broadcast(FIN_OK1)
         print('finished broadcasting polynomials')
 
         # wait for OK2
@@ -526,7 +547,7 @@ class Server:
         status_mat[self.__id - 1] = True
 
         while True:
-            i, status = self.receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
+            i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
             report_mat[i - 1] = True
             if status == OK2:
                 print('recieved OK2 from: ', str(i))
@@ -557,12 +578,17 @@ class Server:
                 p_i += self.deal_vss(r_i)
             else:
                 print('receiving random from: ', str(j))
-                p_i += self.node_vss(self.servers_in[j], j)
+                p_i += self.__node_vss(self.__servers_in[j], j)
         return p_i
 
 
 if __name__ == '__main__':
+    is_byz = input('1 for byzantine other wise not')
+    if is_byz == '1':
+        is_byz = True
+    else:
+        is_byz = False
     welcome_port = random.randint(6000, 10000)  # todo change port assignment to discover
-    server = Server(welcome_port, DISCOVER_IP, DISCOVER_PORT)
+    server = Server(welcome_port, is_byz)
     server.handle_requests()
     server.close()

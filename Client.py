@@ -204,7 +204,7 @@ class Client:
         :return: None
         """
         print('ended session')
-        self.__broadcast.exit()
+        self.__broadcast.close()
 
     def exit(self):
         """
@@ -213,7 +213,7 @@ class Client:
         """
         print('client closed connection')
         for sid in self.__servers:
-            self.__servers[sid].exit()
+            self.__servers[sid].close()
 
     def __deal_vss(self, secret):
         """

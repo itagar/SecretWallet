@@ -71,7 +71,7 @@ class BroadcastServer:
                     if not data:  # client closed connection
                         self.__inputs.remove(r)
                         self.__outputs.remove(r)
-                        r.exit()
+                        r.close()
                         print('removed client: ', str(client_id), ' from broadcast')
                         busy = False
                     else:  # client send message
@@ -82,7 +82,7 @@ class BroadcastServer:
 
     def close(self):
         for sid in self.__servers:
-            self.__servers[sid].exit()
+            self.__servers[sid].close()
         self.__welcome.close()
 
 
