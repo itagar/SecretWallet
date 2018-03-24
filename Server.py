@@ -10,6 +10,9 @@ BUFFER_SIZE = 1024
 class Server:
 
     def __init__(self, port, is_byzantine=False):
+        if is_byzantine:
+            print('a byzantine server')
+
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', port))
@@ -22,11 +25,11 @@ class Server:
         discover_msg = socket.gethostbyname('localhost') + DELIM_1 + str(port)
         send_msg(self.__discover, discover_msg)
         print('connected to discover server successfully.')
-        data = receive_msg(self.__discover)
 
         # connect to broadcast server
-        self.__id, broadcast_host, broadcast_port = data.split(DELIM_1)
+        self.__id, broadcast_host, broadcast_port = receive_msg(self.__discover).split(DELIM_1)
         self.__id = int(self.__id)
+        self.__p_i = int(receive_msg(self.__discover))
         print('server id is: ' + str(self.__id))
         self.__broadcast = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__broadcast.connect((broadcast_host, int(broadcast_port)))
@@ -86,7 +89,7 @@ class Server:
 
         elif request == RETRIEVE:
             print('client: ', client_id, ' wish to retrieve.')
-            self.__retrieve_session(client_socket, client_id)
+            self.__retrieve_session(client_socket)
 
         else:
             print('session with client: ', client_id, ' closed successfully.')
@@ -145,11 +148,14 @@ class Server:
             print('name: ', name, ' is already in use')
             return NAME_ALREADY_TAKEN
 
+        # decide if harm in case byzantine
+        harm = np.random.choice([True, False])
+
         q_k_i = self.__node_vss(client_sock)
-        q_v_i = self.__node_vss(client_sock)
+        q_v_i = self.__node_vss(client_sock, harm)
         self.__secrets[name] = q_k_i, q_v_i
 
-    def __retrieve_session(self, client_sock, client_id):
+    def __retrieve_session(self, client_sock):
         sender, name = self.__receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name in self.__secrets:
@@ -173,8 +179,7 @@ class Server:
 
         q_k_i, q_v_i = self.__secrets[name]
         q_d_i = self.__node_vss(client_sock)
-        # p_i = self.share_random_secret()
-        R_i = q_k_i - q_d_i
+        R_i = (q_k_i - q_d_i) * self.__p_i
 
         # send value of R_i to all servers
         self.__send_broadcast(str(R_i))
@@ -193,7 +198,7 @@ class Server:
         # interpolate R and retrieve key if R(0)=0
         print('X:', X)
         print('Y:', Y)
-        R = robust_interpolation(X, Y, F)
+        R = robust_interpolation(X, Y, 2*F)  # todo
         print('R:', R)
         R_0 = np.polyval(R, 0)
         print('R(0)', R_0)
@@ -241,9 +246,8 @@ class Server:
         for sid in self.__servers_out:
             self.__servers_out[sid].close()
 
-    def __node_vss(self, dealer, dealer_id=CLIENT_SENDER_ID):
+    def __node_vss(self, dealer, harm=False, dealer_id=CLIENT_SENDER_ID):
         # in case byzantine - randomly decide if to do harm
-        harm = np.random.choice([True, False])
         values = receive_msg(dealer).split(DELIM_2)
         g_i = str2pol(values[0])
         h_i = str2pol(values[1])
@@ -465,125 +469,125 @@ class Server:
             print('less then n-f OK2 - VSS failure')
             return 0
 
-    def deal_vss(self, secret):
-        s = create_random_bivariate_polynomial(secret, F)
-        x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
-        s_values = polyval2d(x, y, s).astype(int)
-
-        for sid in self.__servers_out:
-            g = s_values[sid, :]
-            h = s_values[:, sid]
-            data = poly2str(g) + DELIM_2 + poly2str(h)
-            self.__send_to_server(sid, data)
-            print('deal polynomials to server: ', str(sid))
-
-        # receive complaints
-        report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
-        complaints = []
-
-        # todo
-        report_mat[self.__id - 1, :] = True
-        report_mat[:, self.__id - 1] = True
-
-        while not np.all(report_mat):
-            i, data = self.__receive_broadcast()
-            j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
-            j = int(j)
-            report_mat[i - 1, j - 1] = True
-            print('received complaint status from: ', str(i), ' on: ', str(j))
-            if status == COMPLAINT:  # add complaint
-                complaints.append((i, j))
-
-        # solve complaints
-        for i, j in complaints:
-            # broadcast i,j~S(i,j),S(j,i)
-            print('solved complaint of: ', i, ' on: ', j)
-            data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
-            self.__send_broadcast(data)
-
-        # finished complaints resolving
-        print('finished solving complaints')
-        data = FIN_COMPLAINTS
-        self.__send_broadcast(data)
-
-        # wait for OK
-        report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-        report_mat[self.__id - 1] = True  # todo
-        errors_sid = []
-        while True:
-            i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
-            report_mat[i - 1] = True
-            if status == ERROR:
-                print('node: ', str(i), ' sent ERROR1')
-                errors_sid.append(i)
-            else:
-                print('node: ', str(i), ' sent OK1')
-            if np.all(report_mat):
-                break
-
-        # less then n-f sent OK - failure
-        if len(errors_sid) > F:
-            print('less then n-f OK1')
-            return ERROR
-
-        # broadcast polynomials of all error nodes
-        for i in errors_sid:
-            # broadcast i~S(i,y)~S(x,i)
-            print('broadcast polynomial of: ', str(i))
-            g_i = poly2str(s_values[sid, :])
-            h_i = poly2str(s_values[:, sid])
-            data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-            self.__send_broadcast(data)
-
-        # finished broadcasting not ok's polynomials
-        self.__send_broadcast(FIN_OK1)
-        print('finished broadcasting polynomials')
-
-        # wait for OK2
-        report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-        status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-        # todo
-        report_mat[self.__id - 1] = True
-        status_mat[self.__id - 1] = True
-
-        while True:
-            i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
-            report_mat[i - 1] = True
-            if status == OK2:
-                print('recieved OK2 from: ', str(i))
-                status_mat[i - 1] = True
-            else:
-                print('recieved ERROR2 from: ', str(i))
-            if np.all(report_mat):
-                break
-
-        # at least n-f nodes sent ok2 - success
-        if np.count_nonzero(status_mat) >= (NUM_OF_SERVERS - F):
-            print('at least n-f OK2 - VSS success')
-            return s_values[0, self.__id]
-
-        # less then n-f sent ok2 - failure
-        else:
-            print('less then n-f OK2 - VSS failure')
-            return 0
-
-    def share_random_secret(self):
-        p_i = 0
-        for j in range(1, 2):
-            if server.get_id() == j:
-                print('dealing random')
-                # r_i = np.random.randint(1, P)
-                r_i = j
-                print('r_i:' + str(r_i))
-                p_i += self.deal_vss(r_i)
-            else:
-                print('receiving random from: ', str(j))
-                p_i += self.__node_vss(self.__servers_in[j], j)
-        return p_i
+    # def deal_vss(self, secret):
+    #     s = create_random_bivariate_polynomial(secret, F)
+    #     x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
+    #     s_values = polyval2d(x, y, s).astype(int)
+    #
+    #     for sid in self.__servers_out:
+    #         g = s_values[sid, :]
+    #         h = s_values[:, sid]
+    #         data = poly2str(g) + DELIM_2 + poly2str(h)
+    #         self.__send_to_server(sid, data)
+    #         print('deal polynomials to server: ', str(sid))
+    #
+    #     # receive complaints
+    #     report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
+    #     complaints = []
+    #
+    #     # todo
+    #     report_mat[self.__id - 1, :] = True
+    #     report_mat[:, self.__id - 1] = True
+    #
+    #     while not np.all(report_mat):
+    #         i, data = self.__receive_broadcast()
+    #         j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
+    #         j = int(j)
+    #         report_mat[i - 1, j - 1] = True
+    #         print('received complaint status from: ', str(i), ' on: ', str(j))
+    #         if status == COMPLAINT:  # add complaint
+    #             complaints.append((i, j))
+    #
+    #     # solve complaints
+    #     for i, j in complaints:
+    #         # broadcast i,j~S(i,j),S(j,i)
+    #         print('solved complaint of: ', i, ' on: ', j)
+    #         data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
+    #         self.__send_broadcast(data)
+    #
+    #     # finished complaints resolving
+    #     print('finished solving complaints')
+    #     data = FIN_COMPLAINTS
+    #     self.__send_broadcast(data)
+    #
+    #     # wait for OK
+    #     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
+    #     report_mat[self.__id - 1] = True  # todo
+    #     errors_sid = []
+    #     while True:
+    #         i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
+    #         report_mat[i - 1] = True
+    #         if status == ERROR:
+    #             print('node: ', str(i), ' sent ERROR1')
+    #             errors_sid.append(i)
+    #         else:
+    #             print('node: ', str(i), ' sent OK1')
+    #         if np.all(report_mat):
+    #             break
+    #
+    #     # less then n-f sent OK - failure
+    #     if len(errors_sid) > F:
+    #         print('less then n-f OK1')
+    #         return ERROR
+    #
+    #     # broadcast polynomials of all error nodes
+    #     for i in errors_sid:
+    #         # broadcast i~S(i,y)~S(x,i)
+    #         print('broadcast polynomial of: ', str(i))
+    #         g_i = poly2str(s_values[sid, :])
+    #         h_i = poly2str(s_values[:, sid])
+    #         data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
+    #         self.__send_broadcast(data)
+    #
+    #     # finished broadcasting not ok's polynomials
+    #     self.__send_broadcast(FIN_OK1)
+    #     print('finished broadcasting polynomials')
+    #
+    #     # wait for OK2
+    #     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
+    #     status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
+    #     # todo
+    #     report_mat[self.__id - 1] = True
+    #     status_mat[self.__id - 1] = True
+    #
+    #     while True:
+    #         i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
+    #         report_mat[i - 1] = True
+    #         if status == OK2:
+    #             print('recieved OK2 from: ', str(i))
+    #             status_mat[i - 1] = True
+    #         else:
+    #             print('recieved ERROR2 from: ', str(i))
+    #         if np.all(report_mat):
+    #             break
+    #
+    #     # at least n-f nodes sent ok2 - success
+    #     if np.count_nonzero(status_mat) >= (NUM_OF_SERVERS - F):
+    #         print('at least n-f OK2 - VSS success')
+    #         return s_values[0, self.__id]
+    #
+    #     # less then n-f sent ok2 - failure
+    #     else:
+    #         print('less then n-f OK2 - VSS failure')
+    #         return 0
+    #
+    # def share_random_secret(self):
+    #     p_i = 0
+    #     for j in range(1, 2):
+    #         if server.get_id() == j:
+    #             print('dealing random')
+    #             # r_i = np.random.randint(1, P)
+    #             r_i = j
+    #             print('r_i:' + str(r_i))
+    #             p_i += self.deal_vss(r_i)
+    #         else:
+    #             print('receiving random from: ', str(j))
+    #             p_i += self.__node_vss(self.__servers_in[j], j)
+    #     return p_i
 
 
 if __name__ == '__main__':
-    is_byz = input('1 for byzantine other wise not')
+    is_byz = input('1 for byzantine otherwise non-faulty: ')
     if is_byz == '1':
         is_byz = True
     else:

@@ -84,6 +84,7 @@ def robust_interpolation(x, y, deg):
     for indices in p:
         values = np.polyval(p[indices], x)
         inliers = np.count_nonzero((values - y) == 0)
+        print(np.array(indices) + 1, ': ', p[indices], ' inliers: ', inliers)
         if inliers > max_votes:
             best = p[indices]
             max_votes = inliers
@@ -106,7 +107,3 @@ def find_degree(y_array):
         deg += 1
 
     return deg
-
-
-
-

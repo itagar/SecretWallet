@@ -28,6 +28,10 @@ class DiscoverServer:
         connections = 0
         self.__servers_packet = ''
 
+        # create random polynomial for retrieve usage
+        p = np.random.randint(1, P, F+1)
+        p_values = np.polyval(p, np.arange(NUM_OF_SERVERS+1))
+
         # connect to servers
         while connections < NUM_OF_SERVERS:
             print('waiting for servers to connect. currently: ' + str(connections)
@@ -37,7 +41,8 @@ class DiscoverServer:
             cur_id = str(connections + 1)
             welcome_host, welcome_port = receive_msg(conn).split(DELIM_1)
             server_msg = cur_id + DELIM_1 + self.__broadcast_packet
-            send_msg(conn, server_msg)
+            send_msg(conn, server_msg)  # send id and broadcast details
+            send_msg(conn, str(p_values[int(cur_id)]))  # send p_value for retrieve
             connections += 1
             servers.append(conn)
             print('connected successfully to server:' + cur_id + ' in ip: ' + address[0] +
