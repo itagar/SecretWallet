@@ -1,9 +1,11 @@
+import socket
 from Helper import *
+from numpy.polynomial.polynomial import polyval2d
 
 
 class Client:
     """
-    an object represents a Client in the SecretWallet system
+    A Client in the SecretWallet system
     """
 
     def __init__(self):
@@ -76,7 +78,10 @@ class Client:
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.__receive_broadcast()
+            i, status = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('timeout in name validation')
+                break
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -116,7 +121,10 @@ class Client:
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.__receive_broadcast()
+            i, status = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('timeout in name validation')
+                break
             response_mat[i-1] = True
             if status == OK:
                 status_mat[i-1] = True
@@ -131,12 +139,20 @@ class Client:
         Y = []
         inputs = list(self.__servers.values())
         inputs.append(self.__broadcast)
+        timeout_flag = False
         while not response_mat.all():
-            readers, writers, xers = select.select(inputs, [], inputs)
+            if timeout_flag:
+                readers, writers, xers = select.select(inputs, [], inputs, T)
+            else:
+                readers, writers, xers = select.select(inputs, [], inputs)
+            if not readers:
+                print('received timeout while waiting for response from system')
+                break
             for r in readers:
                 if r is self.__broadcast:
                     self.__receive_broadcast()
                 else:
+                    timeout_flag = True
                     i = self.__get_sid(r)
                     response_mat[i-1] = True
                     status, value = self.__receive_from_server(i).split(DELIM_2)
@@ -147,7 +163,7 @@ class Client:
                     else:
                         print('got error from node: ', str(i))
         self.__end_session()
-        if len(X) > (NUM_OF_SERVERS - F):
+        if len(X) >= (NUM_OF_SERVERS - F):
             q = robust_interpolation(np.array(X), np.array(Y), F)
             return np.polyval(q, 0)
         else:
@@ -162,13 +178,14 @@ class Client:
         """
         send_msg(self.__servers[sid], data)
 
-    def __receive_from_server(self, sid):
+    def __receive_from_server(self, sid, timeout=False):
         """
-        receive message from server
+        receive a message from server
         :param sid: server id
-        :return: data received from server
+        :param timeout: if True send TIMEOUT after T seconds
+        :return: received data or TIMEOUT
         """
-        return receive_msg(self.__servers[sid])
+        return receive_msg(self.__servers[sid], timeout)
 
     def __send_broadcast(self, data):
         """
@@ -178,12 +195,15 @@ class Client:
         """
         send_msg(self.__broadcast, data)
 
-    def __receive_broadcast(self):
+    def __receive_broadcast(self, timeout=False):
         """
         receives message from broadcast
-        :return: data received from broadcast channel
+        :param timeout: if True send TIMEOUT after T seconds
+        :return: data received from broadcast channel or TIMEOUT
         """
-        data = receive_msg(self.__broadcast)
+        data = receive_msg(self.__broadcast, timeout)
+        if data == TIMEOUT:
+            return TIMEOUT, None
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
@@ -229,14 +249,21 @@ class Client:
             g = s_values[sid, :]
             h = s_values[:, sid]
             data = poly2str(g) + DELIM_2 + poly2str(h)
-            self.__send_to_server(sid, data)
             print('deal polynomials to server: ', str(sid))
+            self.__send_to_server(sid, data)
 
         # receive complaints
         report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
         complaints = []
+        timeout_flag = False  # todo
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast()
+            i, data = self.__receive_broadcast(timeout_flag)  # todo
+            timeout_flag = True
+            if i == TIMEOUT:
+                print('received timeout while waiting for status report')
+                where = np.where(report_mat == False)
+                complaints.extend([(where[0][i] + 1, where[1][i] + 1) for i in range(len(where[0]))])
+                break
             j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
             j = int(j)
             report_mat[i - 1, j - 1] = True
@@ -259,20 +286,23 @@ class Client:
         # wait for OK
         report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
         errors_sid = []
-        while True:
-            i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
+        while not np.all(report_mat):
+            i, status = self.__receive_broadcast(True)  # receive (i,OK) or (i,ERROR)
+            if i == TIMEOUT:  # todo
+                print('received timeout while waiting for ok')
+                errors_sid.extend(np.where(report_mat == False)[0] + 1)
+                break
             report_mat[i - 1] = True
             if status == ERROR:
                 print('node: ', str(i), ' sent ERROR1')
                 errors_sid.append(i)
             else:
                 print('node: ', str(i), ' sent OK1')
-            if np.all(report_mat):
-                break
 
         # less then n-f sent OK - failure
         if len(errors_sid) > F:
             print('less then n-f OK1')
+            self.__send_broadcast(FIN_VSS)
             return ERROR
 
         # broadcast polynomials of all error nodes
@@ -292,25 +322,28 @@ class Client:
         report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
         status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
 
-        while True:
-            i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
+        while not np.all(report_mat):
+            i, status = self.__receive_broadcast(True)  # receive (i,OK2) or (i,ERROR2)
+            if i == TIMEOUT:  # todo
+                print('received timeout while waiting for OK2')
+                break
             report_mat[i - 1] = True
             if status == OK2:
-                print('recieved OK2 from: ', str(i))
+                print('received OK2 from: ', str(i))
                 status_mat[i - 1] = True
             else:
-                print('recieved ERROR2 from: ', str(i))
-            if np.all(report_mat):
-                break
+                print('received ERROR2 from: ', str(i))
 
         # at least n-f nodes sent ok2 - success
         if np.count_nonzero(status_mat) >= (NUM_OF_SERVERS - F):
             print('at least n-f OK2 - VSS success')
+            self.__send_broadcast(FIN_VSS)
             return OK
 
         # less then n-f sent ok2 - failure
         else:
             print('less then n-f OK2 - VSS failure')
+            self.__send_broadcast(FIN_VSS)
             return ERROR
 
 

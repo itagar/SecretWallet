@@ -4,8 +4,16 @@ import select
 
 
 class BroadcastServer:
+    """
+    A Broadcast Server in the SecretWallet system
+    """
 
     def __init__(self, discover_ip, discover_port):
+        """
+        constructor for BroadcastServer object
+        :param discover_ip: DiscoverServer IP
+        :param discover_port: DiscoverServer welcome port
+        """
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((discover_ip, discover_port))
         print('connected to discover server successfully.')
@@ -28,13 +36,25 @@ class BroadcastServer:
             print('connected successfully to server: ' + str(sid))
             self.__servers[sid] = conn
 
-    def __get_sid(self, sock):
+    def __sid_from_socket(self, sock):
+        """
+        get server's id from socket
+        :param sock: server's socket - socket
+        :return: in case is server - server's id associated with socket, else - 0
+        """
         for sid, server_sock in self.__servers.items():
             if sock is server_sock:
                 return sid
         return 0
 
     def broadcast(self, sender_id, sender_sock, data):
+        """
+        broadcast message to all nodes
+        :param sender_id: sender's id - int
+        :param sender_sock: sender's socket - socket
+        :param data: data sender wish to broadcast - str
+        :return: None
+        """
         data = str(sender_id) + SENDER_DELIM + data
         print('send broadcast: ', data)
         for sock in self.__outputs:
@@ -42,6 +62,10 @@ class BroadcastServer:
                 send_msg(sock, data)
 
     def handle(self):
+        """
+        connect clients to the broadcast channel and broadcast messages between nodes in the channel
+        :return: None
+        """
         print('ready to accept clients')
         busy = False
 
@@ -52,12 +76,13 @@ class BroadcastServer:
         client_id = -1
 
         while True:
-            self.__welcome.listen(NUM_OF_SERVERS)
+            self.__welcome.listen(NUM_OF_SERVERS+1)
             readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)
 
             for r in readable:
 
                 if r is self.__welcome and not busy:  # accept new client if no client is already connected
+                    print('welcome a new client to the broadcast family')
                     client_sock, address = self.__welcome.accept()
                     busy = True
                     data = receive_msg(client_sock)
@@ -74,13 +99,18 @@ class BroadcastServer:
                         r.close()
                         print('removed client: ', str(client_id), ' from broadcast')
                         busy = False
+                        client_sock = None
                     else:  # client send message
                         self.broadcast(CLIENT_SENDER_ID, r, data)
-                else:  # get info from servers.
+                elif r in self.__servers.values():  # get info from servers.
                     data = receive_msg(r)
-                    self.broadcast(self.__get_sid(r), r, data)
+                    self.broadcast(self.__sid_from_socket(r), r, data)
 
     def close(self):
+        """
+        close connections upon exit
+        :return:
+        """
         for sid in self.__servers:
             self.__servers[sid].close()
         self.__welcome.close()

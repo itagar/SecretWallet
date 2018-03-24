@@ -1,9 +1,5 @@
-from numpy.polynomial.polynomial import polyval2d
 import numpy as np
 import select
-from threading import Thread
-import time
-import socket
 from scipy.interpolate import lagrange
 from itertools import combinations
 
@@ -14,7 +10,7 @@ DELIM_1 = ','
 DELIM_2 = '~'
 SENDER_DELIM = '#'
 DISCOVER_IP = '127.0.0.1'
-DISCOVER_PORT = 4400
+DISCOVER_PORT = 4001
 END_SESSION = 0
 STORE = 1
 RETRIEVE = 2
@@ -27,6 +23,7 @@ OK2 = 'OK2'
 ERROR = 'ERR'
 FIN_COMPLAINTS = 'FIN_COMPLAINTS'
 FIN_OK1 = 'FIN_OK1'
+FIN_VSS = 'FIN_VSS'
 FIN_SUCCESS = 'FIN_SUCC'
 FIN_FAILURE = 'FIN_FAIL'
 ENOUGH_OK1 = 'ENOUGH_OK1'
@@ -35,31 +32,69 @@ INVALID_NAME_ERR = 'Name not in DB'
 INVALID_KEY_ERR = 'Invalid Key'
 NAME_ALREADY_TAKEN = 'Name already in use'
 DECIMAL_ERR = 'Key and value has to be decimal'
-BROADCAST_PORT = 4401
+BROADCAST_PORT = 4000
 CLIENT_SENDER_ID = 0
 MESSAGE_LENGTH_DIGITS = 3
+TIMEOUT = 'timeout expired'
+T = 0.2
 
 
 def send_msg(sock, data):
+    """
+    sends a message to given TCP socket
+    :param sock: socket
+    :param data: data you wish to send - str
+    :return: None
+    """
     length = str(len(data)).zfill(MESSAGE_LENGTH_DIGITS)
     sock.sendall((length + data).encode())
 
 
-def receive_msg(sock):
-    length = sock.recv(MESSAGE_LENGTH_DIGITS).decode()
-    if not length:
-        return
-    data = sock.recv(int(length)).decode()
-    return data
+def receive_msg(sock, timeout=False):
+    """
+    receive's a message from a given TCP socket
+    :param sock: socket
+    :param timeout: if True wait T seconds for message then fail
+    :return: message from socket or TIMEOUT in case timeout expired
+    """
+    if timeout:
+        readers, writers, xers = select.select([sock], [], [], T)
+        if readers:
+            length = sock.recv(MESSAGE_LENGTH_DIGITS).decode()
+        else:
+            return TIMEOUT
+        ready = select.select([sock], [], [], T)
+        if ready[0]:
+            data = sock.recv(int(length)).decode()
+            return data
+        else:
+            return TIMEOUT
+    else:
+        length = sock.recv(MESSAGE_LENGTH_DIGITS).decode()
+        if not length:
+            return
+        data = sock.recv(int(length)).decode()
+        return data
 
 
 def create_random_bivariate_polynomial(secret, deg):
+    """
+    create a random bivariate polynomial S in Fp with S[0,0]=secret
+    :param secret: an integer
+    :param deg: degree of polynomial in x and y
+    :return: a random bivariate polynomial S in Fp with S[0,0]=secret
+    """
     s = np.random.randint(low=1, high=P, size=[deg+1, deg+1], dtype=int)
     s[0][0] = secret
     return s
 
 
 def poly2str(p):
+    """
+    code a polynomial to string
+    :param p: a polynomial - list
+    :return: p coded to string
+    """
     data = ''
     for i in p:
         data += str(i) + DELIM_1
@@ -67,6 +102,11 @@ def poly2str(p):
 
 
 def str2pol(s):
+    """
+    decode a string to polynomial
+    :param s: a polynomial coded to string
+    :return: the decoded polynomial - list
+    """
     p = []
     values = s.split(DELIM_1)
     for i in values:
@@ -75,6 +115,13 @@ def str2pol(s):
 
 
 def robust_interpolation(x, y, deg):
+    """
+    preform a robust interpolation
+    :param x: array of x values - np.array
+    :param y: array of y values - np.array
+    :param deg:
+    :return: a polynomial in degree-'deg' that agree with the most given points
+    """
     p = {}
     max_votes = 0
     best = None
@@ -92,6 +139,11 @@ def robust_interpolation(x, y, deg):
 
 
 def find_degree(y_array):
+    """
+    returns the degree of polynomial fit to the given values
+    :param y_array: y values of: X=[0,1,2,...,len(y_array)]
+    :return: the degree of the polynomial fit to y_array
+    """
     if np.all(np.array(y_array) == y_array[0]):
         return 0
     deg = 1

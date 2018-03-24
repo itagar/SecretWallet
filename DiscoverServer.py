@@ -3,8 +3,14 @@ from Helper import *
 
 
 class DiscoverServer:
+    """
+    A Discover Server in SecretWallet System
+    """
 
     def __init__(self):
+        """
+        constructor for DiscoverServer object
+        """
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__welcome.bind(('localhost', DISCOVER_PORT))
@@ -60,6 +66,10 @@ class DiscoverServer:
             print('server: ' + cur_id + ' was discovered successfully and connection was closed')
 
     def accept_clients(self):
+        """
+        accept new clients and discover them to system
+        :return: None
+        """
         print('ready to accept clients')
         client_id = 1
         while True:
@@ -74,6 +84,10 @@ class DiscoverServer:
             client_id += 1
 
     def close(self):
+        """
+        close connections upon exit
+        :return: None
+        """
         self.__welcome.close()
 
 

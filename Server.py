@@ -1,15 +1,22 @@
 import socket
-import select
 import random
-from threading import Thread, Lock
+from threading import Thread
 from Helper import *
 
 BUFFER_SIZE = 1024
 
 
 class Server:
+    """
+    A Server in the Secret Wallet system
+    """
 
     def __init__(self, port, is_byzantine=False):
+        """
+        constructor for Server object
+        :param port:
+        :param is_byzantine:
+        """
         if is_byzantine:
             print('a byzantine server')
 
@@ -47,10 +54,11 @@ class Server:
         # is the server byzantine
         self.__is_byzantine = is_byzantine
 
-    def get_id(self):
-        return self.__id
-
     def __establish_servers_connection(self):
+        """
+        establish connection with the other servers
+        :return: None
+        """
         t1 = Thread(target=self.__accept_servers)
         t2 = Thread(target=self.__connect_servers)
         t1.start()
@@ -60,6 +68,10 @@ class Server:
         print('established connection to all servers.')
 
     def __accept_servers(self):
+        """
+        accepts servers connection
+        :return:
+        """
         connections = 0
         while connections < NUM_OF_SERVERS-1:
             conn, address = self.__welcome.accept()
@@ -69,6 +81,10 @@ class Server:
             print('accepted connection from server: ' + str(cur_id))
 
     def __connect_servers(self):
+        """
+        connect to other servers
+        :return: None
+        """
         addresses = receive_msg(self.__discover).split(DELIM_2)
         for address in addresses:
             cur_id, cur_host, cur_port = address.split(DELIM_1)
@@ -81,6 +97,13 @@ class Server:
                 print('connected to server: ' + str(cur_id))
 
     def __session(self, client_socket, client_id, request):
+        """
+        starts a new session with client in the system
+        :param client_socket: client socket - socket
+        :param client_id: client id - int
+        :param request: STORE or RETRIEVE
+        :return: None
+        """
         print('started session with client: ', client_id)
 
         if request == STORE:
@@ -96,13 +119,24 @@ class Server:
             client_socket.close()
 
     def handle_requests(self):
+        """
+        handles requests from user
+        :return:
+        """
         inputs = [self.__welcome, self.__broadcast]
+        crash = False
         while True:
             print('ready to accept clients')
             print('current secrets: ', self.__secrets)
             self.__welcome.listen(NUM_OF_SERVERS)
             readable, writable, exceptional = select.select(inputs, [], inputs)
             for r in readable:
+
+                # in case faulty
+                if not crash:
+                    crash = np.random.choice([True, False])
+                    if crash:
+                        print('crash into space')
 
                 if r is self.__welcome:  # accept new clients
                     conn, address = self.__welcome.accept()
@@ -114,19 +148,27 @@ class Server:
                 elif r is self.__broadcast:  # new session
                     # get cid and request type
                     data = self.__receive_broadcast()[1].split(DELIM_1)
+                    if self.__is_byzantine and crash:
+                        continue
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
                     self.__session(client_sock, cid, request)
 
                 # remove clients in exit
                 elif r in self.__clients.values():
-                    inputs.remove(r)
-                    cid = self.__get_cid(r)
-                    print('removed client: ', cid)
-                    del self.__clients[cid]
-                    r.close()
+                    if not receive_msg(r):
+                        inputs.remove(r)
+                        cid = self.__cid_from_socket(r)
+                        print('removed client: ', cid)
+                        del self.__clients[cid]
+                        r.close()
 
     def __store_session(self, client_sock):
+        """
+        a new store session with client in the system
+        :param client_sock: client socket - socket
+        :return: None
+        """
         sender, name = self.__receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name not in self.__secrets:
@@ -138,7 +180,10 @@ class Server:
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.__receive_broadcast()
+            i, status = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('received timeout in name checking')
+                break
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -156,18 +201,28 @@ class Server:
         self.__secrets[name] = q_k_i, q_v_i
 
     def __retrieve_session(self, client_sock):
+        """
+        a new retrieve session with client in the system
+        :param client_sock: client socket - socket
+        :return: None
+        """
         sender, name = self.__receive_broadcast()
         status_mat = np.zeros(NUM_OF_SERVERS)
         if name in self.__secrets:
             self.__send_broadcast(OK)
             status_mat[self.__id - 1] = True
+            q_k_i, q_v_i = self.__secrets[name]
         else:
             self.__send_broadcast(INVALID_NAME_ERR)
+            q_k_i, q_v_i = 0, 0
 
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.__receive_broadcast()
+            i, status = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('received timeout in name validation')
+                break
             response_mat[i - 1] = True
             if status == OK:
                 status_mat[i - 1] = True
@@ -177,7 +232,6 @@ class Server:
             print('name: ', name, ' not in secrets')
             return INVALID_NAME_ERR
 
-        q_k_i, q_v_i = self.__secrets[name]
         q_d_i = self.__node_vss(client_sock)
         R_i = (q_k_i - q_d_i) * self.__p_i
 
@@ -187,18 +241,20 @@ class Server:
         # receive values of R_j from all other servers
         report_mat = np.zeros(NUM_OF_SERVERS)
         report_mat[self.__id-1] = True
-        X = np.arange(1, NUM_OF_SERVERS+1)
-        Y = np.zeros(NUM_OF_SERVERS)
-        Y[self.__id-1] = R_i
+        X = [self.__id]
+        Y = [R_i]
         while not report_mat.all():
-            j, R_j = self.__receive_broadcast()
+            j, R_j = self.__receive_broadcast(True)
+            if j == TIMEOUT:
+                break
             report_mat[j-1] = True
-            Y[j-1] = int(R_j)
+            X.append(j)
+            Y.append(int(R_j))
 
         # interpolate R and retrieve key if R(0)=0
         print('X:', X)
         print('Y:', Y)
-        R = robust_interpolation(X, Y, 2*F)  # todo
+        R = robust_interpolation(np.array(X), np.array(Y), 2*F)  # todo
         print('R:', R)
         R_0 = np.polyval(R, 0)
         print('R(0)', R_0)
@@ -210,34 +266,74 @@ class Server:
             print('invalid key - send error to client')
             send_msg(client_sock, ERROR + DELIM_2 + '#')
 
-    def __get_sid(self, sock):
+    def __sid_from_socket(self, sock):
+        """
+        return sid of a given server socket
+        :param sock: a server socket
+        :return: if server - sid associated with server socket, else - 0
+        """
         for sid, server_sock in self.__servers_in.items():
             if sock is server_sock:
                 return sid
         return 0
 
-    def __get_cid(self, sock):
+    def __cid_from_socket(self, sock):
+        """
+        return cid of a given client socket
+        :param sock: a client socket
+        :return: if client - cid associated with client socket, else - 0
+        """
         for cid, client_sock in self.__clients.items():
             if sock is client_sock:
                 return cid
         return 0
 
     def __send_broadcast(self, data):
+        """
+        sends broadcast message
+        :param data: data server wish to broadcast
+        :return: None
+        """
         send_msg(self.__broadcast, data)
 
-    def __receive_broadcast(self):
-        data = receive_msg(self.__broadcast)
+    def __receive_broadcast(self, timeout=False):
+        """
+        receives a broadcast message
+        :param timeout: if True wait stop waiting after T seconds
+        :return: data received from broadcast or TIMEOUT if T expired
+        """
+        data = receive_msg(self.__broadcast, timeout)
+        if data == TIMEOUT:
+            return TIMEOUT, None
         sender, data = data.split(SENDER_DELIM)
         return int(sender), data
 
     def __send_to_server(self, sid, data):
+        """
+        sends a message to server
+        :param sid: server id
+        :param data: data you wish to send
+        :return: None
+        """
         send_msg(self.__servers_out[sid], data)
 
-    def __receive_from_server(self, sid):
-        data = receive_msg(self.__servers_in[sid])
+    def __receive_from_server(self, sid, timeout=False):
+        """
+        receives message from server
+        :param sid: server id
+        :param timeout: if True wait stop waiting after T seconds
+        :return: data received from server or TIMEOUT if T expired
+        """
+        data = receive_msg(self.__servers_in[sid], timeout)
+        if data == TIMEOUT:
+            return TIMEOUT
         return data
 
     def close(self):
+        """
+        close servers connection upon exit
+        :return:
+        """
         self.__welcome.close()
         self.__discover.close()
         self.__broadcast.close()
@@ -246,8 +342,13 @@ class Server:
         for sid in self.__servers_out:
             self.__servers_out[sid].close()
 
-    def __node_vss(self, dealer, harm=False, dealer_id=CLIENT_SENDER_ID):
-        # in case byzantine - randomly decide if to do harm
+    def __node_vss(self, dealer, harm=False):
+        """
+        a node role in vss protocol
+        :param dealer: dealer's socket = socket
+        :param harm: flag for byzantine node to harm protocol - boolean
+        :return: vss share
+        """
         values = receive_msg(dealer).split(DELIM_2)
         g_i = str2pol(values[0])
         h_i = str2pol(values[1])
@@ -256,7 +357,7 @@ class Server:
         print('h_i: ', h_i)
 
         if harm and self.__is_byzantine:
-            print('server wants to harm - random ')
+            print('server wants to harm - random polynomial')
             g_i = np.random.randint(0, P, NUM_OF_SERVERS + 1)
             h_i = np.random.randint(0, P, NUM_OF_SERVERS + 1)
 
@@ -271,23 +372,26 @@ class Server:
 
         # send values to all servers
         for j in self.__servers_out:
-            if j != dealer_id:  # todo
-                data = str(g_i[j]) + DELIM_1 + str(h_i[j])
-                self.__send_to_server(j, data)
-                print('sent values to server: ', str(j))
+            data = str(g_i[j]) + DELIM_1 + str(h_i[j])
+            self.__send_to_server(j, data)
+            print('sent values to server: ', str(j))
 
         # receive and check values from all servers
         report = np.zeros(NUM_OF_SERVERS)
         report[self.__id - 1] = True
-        if dealer_id:  # todo
-            report[dealer_id - 1] = True
         complaints = []
         inputs = self.__servers_in.values()
 
         while not report.all():
-            readers, writers, xers = select.select(inputs, [], [])
+            readers, writers, xers = select.select(inputs, [], [], T)  # todo
+            # case timeout
+            if not readers:
+                print('received timeout while waiting for server values')
+                criminals = (np.where(report == False)[0] + 1).tolist()
+                complaints.extend(criminals)
+                break
             for r in readers:
-                j = self.__get_sid(r)
+                j = self.__sid_from_socket(r)
                 if j > 0:
                     data = self.__receive_from_server(j)
                     g_j_i, h_j_i = data.split(DELIM_1)
@@ -305,28 +409,24 @@ class Server:
         report_mat = np.eye(NUM_OF_SERVERS)
         report_mat[self.__id - 1, :] = True
 
-        if dealer_id:  # todo
-            report_mat[dealer_id - 1, :] = True
-            report_mat[:, dealer_id - 1] = True
-            status_mat[dealer_id - 1, :] = True
-            status_mat[:, dealer_id - 1] = True
-
         for i in range(1, NUM_OF_SERVERS + 1):
-            if i == self.get_id() or i == dealer_id:
+            if i == self.__id:
                 continue
             if i in complaints:
-                status_mat[self.get_id() - 1, i - 1] = False
+                status_mat[self.__id - 1, i - 1] = False
                 data = str(i) + DELIM_2 + COMPLAINT
                 self.__send_broadcast(data)
                 print('sent complaint server: ', str(i))
             else:
-                status_mat[self.get_id() - 1, i - 1] = True
+                status_mat[self.__id - 1, i - 1] = True
                 data = str(i) + DELIM_2 + SYNCED
                 self.__send_broadcast(data)
                 print('sent synced server: ', str(i))
-
         while not report_mat.all():
-            i, data = self.__receive_broadcast()
+            i, data = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('received timeout while waiting for server status')
+                break
             j, stat = data.split(DELIM_2)
             j = int(j)
             report_mat[i - 1, j - 1] = True
@@ -364,15 +464,12 @@ class Server:
         # decide if send ok or not
         ok_error_mat = np.zeros(NUM_OF_SERVERS)
 
-        if dealer_id:  # todo
-            ok_error_mat[dealer_id - 1] = True
-
         data = OK
         ok_flag = True
 
         # if all complaints were solved and polynomials are of degree F send OK1
         if np.all(status_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
-            ok_error_mat[self.get_id() - 1] = True
+            ok_error_mat[self.__id - 1] = True
             print('sent OK1')
         else:
             data = ERROR
@@ -383,13 +480,13 @@ class Server:
 
         # receive all OK or ERROR from all servers
         report_mat = np.zeros(NUM_OF_SERVERS)
-        report_mat[self.get_id() - 1] = True
-
-        if dealer_id:  # todo
-            report_mat[dealer_id - 1] = True
+        report_mat[self.__id - 1] = True
 
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast()
+            i, data = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('received timeout while waiting for OK1')
+                break
             i = int(i)
             report_mat[i - 1] = True
             if data == OK:
@@ -401,6 +498,8 @@ class Server:
         # case less then n-f OK's return the zero-polynomial
         if np.count_nonzero(ok_error_mat) < (NUM_OF_SERVERS - F):
             print('heard less then n-f OK1 - commit to zero polynomial')
+            # wait for vss fin signal
+            self.__receive_broadcast()
             return 0
 
         print('heard at least n-f OK1')
@@ -418,26 +517,24 @@ class Server:
             if find_degree(g_j) != F or find_degree(h_j) != F:
                 print('dishonest dealer')
                 honest_dealer_flag = False
-            if self.get_id == j:
+            if self.__id == j:
                 g_i = g_j
                 h_i = h_j
             else:
-                g_i[j] = h_j[self.get_id()]
-                h_i[j] = g_j[self.get_id()]
+                g_i[j] = h_j[self.__id]
+                h_i[j] = g_j[self.__id]
+
+        print('dealer finished broadcasting polynomials')
 
         # decide if send OK2
         report_mat = np.zeros(NUM_OF_SERVERS)
-        report_mat[self.get_id() - 1] = True
+        report_mat[self.__id - 1] = True
         ok2_error_mat = np.zeros(NUM_OF_SERVERS)
-
-        if dealer_id:  # todo
-            report_mat[dealer_id - 1] = True
-            ok2_error_mat[dealer_id - 1] = True
 
         # case solve all complaints and my polynomials are of degree F and dealer responded with degree F polynomials
         if ok_flag and honest_dealer_flag and np.all(ok_error_mat) and find_degree(g_i) == F and find_degree(h_i) == F:
             print('sent OK2')
-            ok2_error_mat[self.get_id() - 1] = True
+            ok2_error_mat[self.__id - 1] = True
             self.__send_broadcast(OK2)
 
         # case dealer didn't solve all complaints
@@ -446,7 +543,10 @@ class Server:
             print('sent ERROR2')
 
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast()
+            i, data = self.__receive_broadcast(True)  # todo
+            if i == TIMEOUT:
+                print('timeout while waiting for OK2')
+                break
             print("data: ERROR2 or OK2 from i", data,' ', i)
             i = int(i)
             report_mat[i - 1] = True
@@ -457,142 +557,35 @@ class Server:
                 print('heard ERROR2 from: ', str(i))
 
         if self.__is_byzantine and harm:
+            self.__receive_broadcast()
             return np.random.randint(0, P)
 
         # at least n-f sent ok2 - success
         if np.count_nonzero(ok2_error_mat) >= (NUM_OF_SERVERS - F):
             print('at least n-f OK2 - VSS success')
-            return g_i[0]
+            q_i = g_i[0]
 
         # less then n-f sent ok2 - failure - return zero polynomial
         else:
             print('less then n-f OK2 - VSS failure')
-            return 0
+            q_i = 0
 
-    # def deal_vss(self, secret):
-    #     s = create_random_bivariate_polynomial(secret, F)
-    #     x, y = np.meshgrid(np.arange(0, NUM_OF_SERVERS + 1), np.arange(0, NUM_OF_SERVERS + 1))
-    #     s_values = polyval2d(x, y, s).astype(int)
-    #
-    #     for sid in self.__servers_out:
-    #         g = s_values[sid, :]
-    #         h = s_values[:, sid]
-    #         data = poly2str(g) + DELIM_2 + poly2str(h)
-    #         self.__send_to_server(sid, data)
-    #         print('deal polynomials to server: ', str(sid))
-    #
-    #     # receive complaints
-    #     report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
-    #     complaints = []
-    #
-    #     # todo
-    #     report_mat[self.__id - 1, :] = True
-    #     report_mat[:, self.__id - 1] = True
-    #
-    #     while not np.all(report_mat):
-    #         i, data = self.__receive_broadcast()
-    #         j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
-    #         j = int(j)
-    #         report_mat[i - 1, j - 1] = True
-    #         print('received complaint status from: ', str(i), ' on: ', str(j))
-    #         if status == COMPLAINT:  # add complaint
-    #             complaints.append((i, j))
-    #
-    #     # solve complaints
-    #     for i, j in complaints:
-    #         # broadcast i,j~S(i,j),S(j,i)
-    #         print('solved complaint of: ', i, ' on: ', j)
-    #         data = str(i) + DELIM_1 + str(j) + DELIM_2 + str(s_values[i, j]) + DELIM_1 + str(s_values[j, i])
-    #         self.__send_broadcast(data)
-    #
-    #     # finished complaints resolving
-    #     print('finished solving complaints')
-    #     data = FIN_COMPLAINTS
-    #     self.__send_broadcast(data)
-    #
-    #     # wait for OK
-    #     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-    #     report_mat[self.__id - 1] = True  # todo
-    #     errors_sid = []
-    #     while True:
-    #         i, status = self.__receive_broadcast()  # receive (i,OK) or (i,ERROR)
-    #         report_mat[i - 1] = True
-    #         if status == ERROR:
-    #             print('node: ', str(i), ' sent ERROR1')
-    #             errors_sid.append(i)
-    #         else:
-    #             print('node: ', str(i), ' sent OK1')
-    #         if np.all(report_mat):
-    #             break
-    #
-    #     # less then n-f sent OK - failure
-    #     if len(errors_sid) > F:
-    #         print('less then n-f OK1')
-    #         return ERROR
-    #
-    #     # broadcast polynomials of all error nodes
-    #     for i in errors_sid:
-    #         # broadcast i~S(i,y)~S(x,i)
-    #         print('broadcast polynomial of: ', str(i))
-    #         g_i = poly2str(s_values[sid, :])
-    #         h_i = poly2str(s_values[:, sid])
-    #         data = str(i) + DELIM_2 + g_i + DELIM_2 + h_i
-    #         self.__send_broadcast(data)
-    #
-    #     # finished broadcasting not ok's polynomials
-    #     self.__send_broadcast(FIN_OK1)
-    #     print('finished broadcasting polynomials')
-    #
-    #     # wait for OK2
-    #     report_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-    #     status_mat = np.zeros(NUM_OF_SERVERS, dtype=bool)
-    #     # todo
-    #     report_mat[self.__id - 1] = True
-    #     status_mat[self.__id - 1] = True
-    #
-    #     while True:
-    #         i, status = self.__receive_broadcast()  # receive (i,OK2) or (i,ERROR2)
-    #         report_mat[i - 1] = True
-    #         if status == OK2:
-    #             print('recieved OK2 from: ', str(i))
-    #             status_mat[i - 1] = True
-    #         else:
-    #             print('recieved ERROR2 from: ', str(i))
-    #         if np.all(report_mat):
-    #             break
-    #
-    #     # at least n-f nodes sent ok2 - success
-    #     if np.count_nonzero(status_mat) >= (NUM_OF_SERVERS - F):
-    #         print('at least n-f OK2 - VSS success')
-    #         return s_values[0, self.__id]
-    #
-    #     # less then n-f sent ok2 - failure
-    #     else:
-    #         print('less then n-f OK2 - VSS failure')
-    #         return 0
-    #
-    # def share_random_secret(self):
-    #     p_i = 0
-    #     for j in range(1, 2):
-    #         if server.get_id() == j:
-    #             print('dealing random')
-    #             # r_i = np.random.randint(1, P)
-    #             r_i = j
-    #             print('r_i:' + str(r_i))
-    #             p_i += self.deal_vss(r_i)
-    #         else:
-    #             print('receiving random from: ', str(j))
-    #             p_i += self.__node_vss(self.__servers_in[j], j)
-    #     return p_i
+        # wait for vss fin signal
+        self.__receive_broadcast()
+        return q_i
 
 
 if __name__ == '__main__':
-    is_byz = input('1 for byzantine otherwise non-faulty: ')
-    if is_byz == '1':
-        is_byz = True
-    else:
-        is_byz = False
-    welcome_port = random.randint(6000, 10000)  # todo change port assignment to discover
-    server = Server(welcome_port, is_byz)
+    while True:
+        my_input = input('please insert y for byzantine server or n for non-faulty: ')
+        if my_input == 'y':
+            faulty = True
+            break
+        elif my_input == 'n':
+            faulty = False
+            break
+    # pick random port
+    welcome_port = random.randint(6000, 10000)
+    server = Server(welcome_port, faulty)
     server.handle_requests()
     server.close()

@@ -1,0 +1,50 @@
+                                                            SecretWallet 
+
+                           Participants: Amos Gropp, Daniel Novikov, Itai Tagar, Tom Nissim
+
+Itai TODO's
+ - Connect SecretWallet class to Protocol. 
+ - handle wrong usage in SecretWallet class (before it goes to the protocol itself)
+
+TODO
+- check in Aquarium about recommended TimeOut value
+
+  System properties:
+-	N = 3F + 1. Current default: N = 4, F = 1
+-	Communication is done using SSL.
+- 	Can withstand crash failures from F servers. 
+-	Can withstand malicious messages from F servers.
+-	The system may handle many clients simultaneously.
+-	Every client may store and retrieve as much secret as he desires.
+-	Code implementation is fully based on the BGW protocol configuration which was introduced on the exercise.
+-	‘Store’ and ‘Retrieve’ Operations Implementations ae based on the protocols which were introduced on the exercise.
+-	The implementation contains a GUI interface through which a client can store and retrieve a secret.
+
+  Usage
+
+First, create service network:
+ - run DiscoverServer instance
+ - run BroadcastServer instance
+ - run 4 Server instances - for each server - type 'y' if you wish that the server will act malliciously, 
+   (in particular - may crash), type 'n' otherwise (Remember: only F=1 server may be faulty)
+
+- Open GUI.
+
+To store a value, a client must do the following:
+1.	Click on the ‘Store’ icon.
+2.	‘Name’ tab - Insert a name which will represent the current <key, value> storing process. 
+3.	‘Key’ tab – Insert a key (with that key -  a client may retrieve his Value back).
+4.	‘Value’ tab – the value that the client wants to keep as secret.
+
+To retrieve a value which was stored earlier, a client must do the following:
+1.	Click on the ‘Retrieve’ icon.
+2.	‘Name’ tab – the client should insert the name which was associated with the storing process.
+3.	‘Key tab – the client should insert the key which is associated with the stored secret (value)
+4.	If the inserted ‘Name’ and ‘Key’ were indeed used the store a ‘Value’ in the past, in the end of the ‘Retrieve’
+        process – the client will get his ‘Value’ back. 
+
+Remarks:
+-	The ‘Name’ is unique per store-retrieve process. Every <key, value> store and retrieve session – must be
+        associated with a unique ‘Name’. i.e. – don’t use the same ‘Name’ for different <key,value> storing sessions. 
+-	In order to gain full UI – the client must go to : Tools -> Top Secret, in the GUI menu (Linux only).
+
