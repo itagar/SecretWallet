@@ -347,26 +347,26 @@ class Client:
             return ERROR
 
 
-if __name__ == '__main__':
-    client = Client()
-    while True:
-        request = input('what should i do next: ')
-        if request == 'store':
-            secret_name, secret_key, secret_value = input('please insert: name key value ').split()
-            client.store(secret_name, secret_key, secret_value)
-        elif request == 'ret':
-            secret_name, secret_key = input('please insert: name key ').split()
-            value = client.retrieve(secret_name, secret_key)
-            if value == INVALID_NAME_ERR:
-                print(secret_name, ' is not in database')
-            elif value == INVALID_KEY_ERR:
-                print(INVALID_KEY_ERR)
-            else:
-                print('correct key - value is: ', value)
-
-        elif request == 'exit':
-            print('see you next time.')
-            break
-        else:
-            print('Invalid Usage ')
-    client.exit()
+# if __name__ == '__main__':
+#     client = Client()
+#     while True:
+#         request = input('what should i do next: ')
+#         if request == 'store':
+#             secret_name, secret_key, secret_value = input('please insert: name key value ').split()
+#             client.store(secret_name, secret_key, secret_value)
+#         elif request == 'ret':
+#             secret_name, secret_key = input('please insert: name key ').split()
+#             value = client.retrieve(secret_name, secret_key)
+#             if value == INVALID_NAME_ERR:
+#                 print(secret_name, ' is not in database')
+#             elif value == INVALID_KEY_ERR:
+#                 print(INVALID_KEY_ERR)
+#             else:
+#                 print('correct key - value is: ', value)
+#
+#         elif request == 'exit':
+#             print('see you next time.')
+#             break
+#         else:
+#             print('Invalid Usage ')
+#     client.exit()

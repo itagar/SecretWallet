@@ -2,6 +2,8 @@ import tkinter as tk
 import os
 import subprocess
 
+import Client
+
 
 # Titles and Messages:
 VERSION = 0.1
@@ -19,6 +21,7 @@ HELP_TITLE = "Help"
 ABOUT_TITLE = "About"
 EMPTY_ENTRY_ERROR = "Error: Empty entries"
 NAME_ERROR = "Error: Name is already stored"
+DEC_ERROR = 'Error: Key/Value must be Decimal Number'
 INVALID_KEY_ERROR = "Invalid Key"
 INVALID_NAME_ERROR = "Invalid Name"
 STORE_SUCCESS_MSG = "Successfully Stored!"
@@ -43,13 +46,13 @@ STATUS_TIMEOUT = 4000
 
 class ClientGUI:
 
-    def __init__(self, master):
+    def __init__(self, master, client):
         """ Initialize the GUI window for the client. """
-        self.__transactions = {}  # TODO: Delete This.
-
         self.__master = master
+        self.__client = client
         self.__status = tk.Label(master, text=DEFAULT_STATUS)
         self.__create_window()
+        self.__master.protocol("WM_DELETE_WINDOW", self.__on_close)
         self.__master.mainloop()
 
     # ==----   GUI Creation Functions   ----== #
@@ -103,7 +106,7 @@ class ClientGUI:
         command_menu.add_command(label="Retrieve", command=self.__retrieve)
         tools_menu.add_separator()
         # Tools --> Exit.
-        tools_menu.add_command(label="Exit", command=self.__master.quit)
+        tools_menu.add_command(label="Exit", command=self.__on_close)
 
         # Help Menu:
         help_menu = tk.Menu(main_menu, tearoff=False)
@@ -211,14 +214,21 @@ class ClientGUI:
                 self.__status_change(STORE_FAILURE_MSG, True)
                 return
 
-            if transaction_id in self.__transactions.keys():
+            ret = self.__client.store(transaction_id, key, value)
+
+            if ret == Client.DECIMAL_ERR:
+                info_label.config(text=DEC_ERROR, fg='red')
+                self.__status_change(STORE_FAILURE_MSG, True)
+                return
+
+            if ret == Client.NAME_ALREADY_TAKEN:
                 info_label.config(text=NAME_ERROR, fg='red')
                 self.__status_change(STORE_FAILURE_MSG, True)
                 return
 
-            self.__transactions[transaction_id] = (key, value)
-            info_label.config(text=STORE_SUCCESS_MSG, fg='green')
-            self.__status_change(STORE_SUCCESS_MSG)
+            if ret == Client.OK:
+                info_label.config(text=STORE_SUCCESS_MSG, fg='green')
+                self.__status_change(STORE_SUCCESS_MSG)
 
         button_frame = tk.Frame(store_window)
         store_button = tk.Button(button_frame, text='Store',
@@ -230,8 +240,6 @@ class ClientGUI:
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         store_button.pack()
         cancel_button.pack()
-
-        print(self.__transactions)  # TODO: Delete This.
 
     def __retrieve(self):
         retrieve_window = tk.Toplevel()
@@ -281,19 +289,22 @@ class ClientGUI:
                 self.__status_change(RETRIEVE_FAILURE_MSG, True)
                 return
 
-            if transaction_id not in self.__transactions.keys():
+            ret = self.__client.retrieve(transaction_id, key)
+
+            if ret == Client.INVALID_NAME_ERR:
                 info_label.config(text=INVALID_NAME_ERROR, fg='red')
-                self.__status_change(RETRIEVE_FAILURE_MSG, True)
+                self.__status_change(STORE_FAILURE_MSG, True)
                 return
 
-            real_key, real_value = self.__transactions[transaction_id]
-            if key != real_key:
+            if ret == Client.INVALID_KEY_ERR:
                 info_label.config(text=INVALID_KEY_ERROR, fg='red')
-                self.__status_change(RETRIEVE_FAILURE_MSG, True)
-            else:
-                value_string.set(real_value)
-                info_label.config(text=RETRIEVE_SUCCESS_MSG, fg='green')
-                self.__status_change(RETRIEVE_SUCCESS_MSG)
+                self.__status_change(STORE_FAILURE_MSG, True)
+                return
+
+            # 'ret' is the value.
+            value_string.set(ret)
+            info_label.config(text=RETRIEVE_SUCCESS_MSG, fg='green')
+            self.__status_change(RETRIEVE_SUCCESS_MSG)
 
         button_frame = tk.Frame(retrieve_window)
         store_button = tk.Button(button_frame, text='Retrieve',
@@ -304,8 +315,6 @@ class ClientGUI:
         button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         store_button.pack()
         cancel_button.pack()
-
-        print(self.__transactions)  # TODO: Delete This.
 
     @staticmethod
     def __help():
@@ -329,7 +338,14 @@ class ClientGUI:
         info_msg.image = about_image  # Required for displaying the image.
         info_msg.pack()
 
+    def __on_close(self):
+        """ A function which handles the exit procedure. """
+        self.__client.exit()
+        self.__master.destroy()
+
 
 if __name__ == '__main__':
+    client = Client.Client()
     root = tk.Tk()
-    client = ClientGUI(root)
+
+    ClientGUI(root, client)
