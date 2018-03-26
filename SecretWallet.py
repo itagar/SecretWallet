@@ -268,7 +268,7 @@ class ClientGUI:
 
         key_frame = tk.Frame(retrieve_window)
         key_label = tk.Label(key_frame, width=10, text=KEY_LABEL, anchor='w')
-        key_entry = tk.Entry(key_frame, width=30)
+        key_entry = tk.Entry(key_frame, width=30, show="\u2022")
         key_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=3)
         key_label.pack(side=tk.LEFT)
         key_entry.pack(side=tk.RIGHT, fill=tk.X, expand=tk.YES)
@@ -362,7 +362,6 @@ class ClientGUI:
         """ Activates Top Secret function. """
         file_path = os.getcwd() + os.path.sep + "TopSecret.mp3"
         subprocess.Popen(r'vlc ' + file_path, shell=True)
-
 
 
 if __name__ == '__main__':
