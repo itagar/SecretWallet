@@ -307,12 +307,12 @@ class ClientGUI:
 
             if ret == Client.INVALID_NAME_ERR:
                 info_label.config(text=INVALID_NAME_ERROR, fg='red')
-                self.__status_change(STORE_FAILURE_MSG, True)
+                self.__status_change(RETRIEVE_FAILURE_MSG, True)
                 return
 
             if ret == Client.INVALID_KEY_ERR:
                 info_label.config(text=INVALID_KEY_ERROR, fg='red')
-                self.__status_change(STORE_FAILURE_MSG, True)
+                self.__status_change(RETRIEVE_FAILURE_MSG, True)
                 return
 
             # 'ret' is the value.
