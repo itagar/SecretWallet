@@ -93,5 +93,10 @@ class DiscoverServer:
 
 if __name__ == '__main__':
     discover_server = DiscoverServer()
-    discover_server.accept_clients()
-    discover_server.close()
+
+    # handle requests
+    try:
+        discover_server.accept_clients()
+    finally:
+        print('discover server exiting system')
+        discover_server.close()

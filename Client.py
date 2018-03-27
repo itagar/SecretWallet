@@ -78,7 +78,7 @@ class Client:
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.__receive_broadcast(True)  # todo
+            i, status = self.__receive_broadcast(True)
             if i == TIMEOUT:
                 print('timeout in name validation')
                 break
@@ -121,7 +121,7 @@ class Client:
         response_mat = np.zeros(NUM_OF_SERVERS)
         status_mat = np.zeros(NUM_OF_SERVERS)
         while not response_mat.all():
-            i, status = self.__receive_broadcast(True)  # todo
+            i, status = self.__receive_broadcast(True)
             if i == TIMEOUT:
                 print('timeout in name validation')
                 break
@@ -255,14 +255,15 @@ class Client:
         # receive complaints
         report_mat = np.eye(NUM_OF_SERVERS, dtype=bool)
         complaints = []
-        timeout_flag = False  # todo
+        timeout_flag = False
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast(timeout_flag)  # todo
+            i, data = self.__receive_broadcast(timeout_flag)
             timeout_flag = True
             if i == TIMEOUT:
                 print('received timeout while waiting for status report')
                 where = np.where(report_mat == False)
                 complaints.extend([(where[0][i] + 1, where[1][i] + 1) for i in range(len(where[0]))])
+                self.__send_broadcast(TIMEOUT_COMPLAINTS)
                 break
             j, status = data.split(DELIM_2)  # receive i#j~OK or i#j~COMPLAINT
             j = int(j)
@@ -272,6 +273,7 @@ class Client:
                 complaints.append((i, j))
 
         # solve complaints
+
         for i, j in complaints:
             # broadcast i,j~S(i,j),S(j,i)
             print('solved complaint of: ', i, ' on: ', j)
@@ -288,9 +290,10 @@ class Client:
         errors_sid = []
         while not np.all(report_mat):
             i, status = self.__receive_broadcast(True)  # receive (i,OK) or (i,ERROR)
-            if i == TIMEOUT:  # todo
-                print('received timeout while waiting for ok')
+            if i == TIMEOUT:
+                print('received timeout while waiting for OK1')
                 errors_sid.extend(np.where(report_mat == False)[0] + 1)
+                self.__send_broadcast(TIMEOUT_OK1)  # inform nodes dealer got timeout
                 break
             report_mat[i - 1] = True
             if status == ERROR:
@@ -324,8 +327,9 @@ class Client:
 
         while not np.all(report_mat):
             i, status = self.__receive_broadcast(True)  # receive (i,OK2) or (i,ERROR2)
-            if i == TIMEOUT:  # todo
+            if i == TIMEOUT:
                 print('received timeout while waiting for OK2')
+                self.__send_broadcast(TIMEOUT_OK2)
                 break
             report_mat[i - 1] = True
             if status == OK2:
@@ -345,28 +349,3 @@ class Client:
             print('less then n-f OK2 - VSS failure')
             self.__send_broadcast(FIN_VSS)
             return ERROR
-
-
-# if __name__ == '__main__':
-#     client = Client()
-#     while True:
-#         request = input('what should i do next: ')
-#         if request == 'store':
-#             secret_name, secret_key, secret_value = input('please insert: name key value ').split()
-#             client.store(secret_name, secret_key, secret_value)
-#         elif request == 'ret':
-#             secret_name, secret_key = input('please insert: name key ').split()
-#             value = client.retrieve(secret_name, secret_key)
-#             if value == INVALID_NAME_ERR:
-#                 print(secret_name, ' is not in database')
-#             elif value == INVALID_KEY_ERR:
-#                 print(INVALID_KEY_ERR)
-#             else:
-#                 print('correct key - value is: ', value)
-#
-#         elif request == 'exit':
-#             print('see you next time.')
-#             break
-#         else:
-#             print('Invalid Usage ')
-#     client.exit()

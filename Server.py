@@ -134,7 +134,7 @@ class Server:
 
                 # in case faulty
                 if not crash:
-                    crash = np.random.choice([True, False])
+                    crash = np.random.choice([False, True])
                     if crash:
                         print('crash into space')
 
@@ -180,7 +180,7 @@ class Server:
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.__receive_broadcast(True)  # todo
+            i, status = self.__receive_broadcast(True)
             if i == TIMEOUT:
                 print('received timeout in name checking')
                 break
@@ -219,7 +219,7 @@ class Server:
         response_mat = np.zeros(NUM_OF_SERVERS)
         response_mat[self.__id - 1] = True
         while not response_mat.all():
-            i, status = self.__receive_broadcast(True)  # todo
+            i, status = self.__receive_broadcast(True)
             if i == TIMEOUT:
                 print('received timeout in name validation')
                 break
@@ -254,7 +254,7 @@ class Server:
         # interpolate R and retrieve key if R(0)=0
         print('X:', X)
         print('Y:', Y)
-        R = robust_interpolation(np.array(X), np.array(Y), 2*F)  # todo
+        R = robust_interpolation(np.array(X), np.array(Y), 2 * F)
         print('R:', R)
         R_0 = np.polyval(R, 0)
         print('R(0)', R_0)
@@ -383,7 +383,7 @@ class Server:
         inputs = self.__servers_in.values()
 
         while not report.all():
-            readers, writers, xers = select.select(inputs, [], [], T)  # todo
+            readers, writers, xers = select.select(inputs, [], [], T)
             # case timeout
             if not readers:
                 print('received timeout while waiting for server values')
@@ -423,9 +423,9 @@ class Server:
                 self.__send_broadcast(data)
                 print('sent synced server: ', str(i))
         while not report_mat.all():
-            i, data = self.__receive_broadcast(True)  # todo
-            if i == TIMEOUT:
-                print('received timeout while waiting for server status')
+            i, data = self.__receive_broadcast()
+            if i == 0 and data == TIMEOUT_COMPLAINTS:
+                print('timeout whlie waiting for complaints')
                 break
             j, stat = data.split(DELIM_2)
             j = int(j)
@@ -483,9 +483,9 @@ class Server:
         report_mat[self.__id - 1] = True
 
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast(True)  # todo
-            if i == TIMEOUT:
-                print('received timeout while waiting for OK1')
+            i, data = self.__receive_broadcast()
+            if i == 0 and data == TIMEOUT_OK1:
+                print('timeout while waiting for OK1')
                 break
             i = int(i)
             report_mat[i - 1] = True
@@ -543,8 +543,8 @@ class Server:
             print('sent ERROR2')
 
         while not np.all(report_mat):
-            i, data = self.__receive_broadcast(True)  # todo
-            if i == TIMEOUT:
+            i, data = self.__receive_broadcast()
+            if i == 0 and data == TIMEOUT_OK2:
                 print('timeout while waiting for OK2')
                 break
             print("data: ERROR2 or OK2 from i", data,' ', i)
@@ -576,16 +576,18 @@ class Server:
 
 
 if __name__ == '__main__':
-    while True:
-        my_input = input('please insert y for byzantine server or n for non-faulty: ')
-        if my_input == 'y':
-            faulty = True
-            break
-        elif my_input == 'n':
-            faulty = False
-            break
+    faulty = False
+    my_input = input('please insert b for byzantine server or anything else for non-faulty: ')
+    if my_input == 'b':
+        faulty = True
     # pick random port
     welcome_port = random.randint(6000, 10000)
     server = Server(welcome_port, faulty)
-    server.handle_requests()
-    server.close()
+
+    # run system
+    try:
+        server.handle_requests()
+    finally:
+        print('server exiting system')
+        server.close()
+

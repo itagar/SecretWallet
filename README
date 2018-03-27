@@ -24,8 +24,8 @@ Usage:
 	1. First, create service network:
 		- run DiscoverServer instance
 		- run BroadcastServer instance
-		- run 4 Server instances - for each server - type 'y' if you wish that the server will act malliciously, 
-		  (in particular - may crash), type 'n' otherwise (Remember: only F=1 server may be faulty)
+		- run 4 Server instances - for each server - type 'b' if you wish that the server will act malliciously, 
+		  (in particular - may crash), otherwise type anything else (Remember: only F=1 server may be faulty)
 
 	2. Open GUI.
 

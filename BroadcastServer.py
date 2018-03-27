@@ -118,5 +118,10 @@ class BroadcastServer:
 
 if __name__ == '__main__':
     broadcast_server = BroadcastServer(DISCOVER_IP, DISCOVER_PORT)
-    broadcast_server.handle()
-    broadcast_server.close()
+
+    # handle requests
+    try:
+        broadcast_server.handle()
+    finally:
+        print('broadcast server exiting system')
+        broadcast_server.close()
