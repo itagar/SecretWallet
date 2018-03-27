@@ -9,7 +9,7 @@ TODO:
 
 System properties:
 	- N = 3F + 1. Current default: N = 4, F = 1
-	- Communication is done using SSL.
+	- Communication is done using TCP sockets.
 	- Can withstand crash failures from F servers. 
 	- Can withstand malicious messages from F servers.
 	- The system may handle many clients simultaneously.
@@ -24,7 +24,7 @@ Usage:
 	1. First, create service network:
 		- run DiscoverServer instance
 		- run BroadcastServer instance
-		- run 4 Server instances - for each server - type 'b' if you wish that the server will act malliciously, 
+		- run 4 Server instances : for each server type 'b' if you wish that the server will act malliciously, 
 		  (in particular - may crash), otherwise type anything else (Remember: only F=1 server may be faulty)
 
 	2. Open GUI.
