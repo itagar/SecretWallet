@@ -76,7 +76,7 @@ class BroadcastServer:
         client_id = -1
 
         while True:
-            self.__welcome.listen(NUM_OF_SERVERS+1)
+            self.__welcome.listen(socket.SOMAXCONN)
             readable, writable, exceptional = select.select(self.__inputs, [], self.__inputs)
 
             for r in readable:

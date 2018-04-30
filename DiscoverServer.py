@@ -73,7 +73,7 @@ class DiscoverServer:
         print('ready to accept clients')
         client_id = 1
         while True:
-            self.__welcome.listen(NUM_OF_SERVERS)
+            self.__welcome.listen(socket.SOMAXCONN)
             conn, address = self.__welcome.accept()
             # send to client all data required to connect to the system
             print('connected client: ', client_id)
