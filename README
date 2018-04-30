@@ -4,9 +4,6 @@
 =		  Participants: Amos Gropp, Daniel Novikov, Itai Tagar, Tom Nissim		=
 =-----------------------------------------------------------------------------------------------=
 
-TODO:
-	- check in Aquarium about recommended TimeOut value
-
 System properties:
 	- N = 3F + 1. Current default: N = 4, F = 1
 	- Communication is done using TCP sockets.

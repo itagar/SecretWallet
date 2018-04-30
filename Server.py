@@ -11,7 +11,7 @@ class Server:
     A Server in the Secret Wallet system
     """
 
-    def __init__(self, port, is_byzantine=False):
+    def __init__(self, port, is_byzantine=False, is_crash=False):
         """
         constructor for Server object
         :param port:
@@ -20,16 +20,19 @@ class Server:
         if is_byzantine:
             print('a byzantine server')
 
+        if is_crash:
+            print('a crash server')
+
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__welcome.bind(('localhost', port))
+        self.__welcome.bind((socket.gethostbyname(socket.gethostname()), port))
         self.__welcome.listen(NUM_OF_SERVERS)
-        print('welcome socket established in ip:', socket.gethostbyname('localhost'), ' and port: ', str(port))
+        print('welcome socket established in ip:', socket.gethostbyname(socket.gethostname()), ' and port: ', str(port))
 
         # connect to discover server
         self.__discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.__discover.connect((DISCOVER_IP, DISCOVER_PORT))
-        discover_msg = socket.gethostbyname('localhost') + DELIM_1 + str(port)
+        discover_msg = socket.gethostbyname(socket.gethostname()) + DELIM_1 + str(port)
         send_msg(self.__discover, discover_msg)
         print('connected to discover server successfully.')
 
@@ -51,8 +54,9 @@ class Server:
         self.__establish_servers_connection()
         self.__discover.close()
 
-        # is the server byzantine
+        # is the server faulty
         self.__is_byzantine = is_byzantine
+        self.__is_crash = is_crash
 
     def __establish_servers_connection(self):
         """
@@ -148,7 +152,7 @@ class Server:
                 elif r is self.__broadcast:  # new session
                     # get cid and request type
                     data = self.__receive_broadcast()[1].split(DELIM_1)
-                    if self.__is_byzantine and crash:
+                    if self.__is_crash and crash:
                         continue
                     cid, request = int(data[0]), int(data[1])
                     client_sock = self.__clients[cid]
@@ -577,12 +581,15 @@ class Server:
 
 if __name__ == '__main__':
     faulty = False
+    crash = True
     my_input = input('please insert b for byzantine server or anything else for non-faulty: ')
     if my_input == 'b':
         faulty = True
+    if my_input == 'c':
+        crash = True
     # pick random port
     welcome_port = random.randint(6000, 10000)
-    server = Server(welcome_port, faulty)
+    server = Server(welcome_port, faulty, crash)
 
     # run system
     try:

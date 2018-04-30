@@ -13,8 +13,8 @@ class DiscoverServer:
         """
         # create welcome socket
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__welcome.bind(('localhost', DISCOVER_PORT))
-        print('discover server is live with ip: ' + socket.gethostbyname('localhost') +
+        self.__welcome.bind((DISCOVER_IP, DISCOVER_PORT))
+        print('discover server is live with ip: ' + socket.gethostbyname(DISCOVER_IP) +
               ' and port: ' + str(DISCOVER_PORT))
 
         # connect to broadcast to get information for discovery

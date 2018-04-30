@@ -9,7 +9,7 @@ BUFFER_SIZE = 1024
 DELIM_1 = ','
 DELIM_2 = '~'
 SENDER_DELIM = '#'
-DISCOVER_IP = '127.0.0.1'
+DISCOVER_IP = '127.0.0.1'  # insert discover ip here
 DISCOVER_PORT = 3331
 BROADCAST_PORT = 3341
 END_SESSION = 0
@@ -33,7 +33,6 @@ FIN_SUCCESS = 'FIN_SUCC'
 FIN_FAILURE = 'FIN_FAIL'
 
 ENOUGH_OK1 = 'ENOUGH_OK1'
-BROADCAST_HOST = 'localhost'
 INVALID_NAME_ERR = 'Name not in DB'
 INVALID_KEY_ERR = 'Invalid Key'
 NAME_ALREADY_TAKEN = 'Name already in use'
@@ -41,7 +40,7 @@ DECIMAL_ERR = 'Key and value has to be decimal'
 CLIENT_SENDER_ID = 0
 MESSAGE_LENGTH_DIGITS = 3
 TIMEOUT = 'timeout expired'
-T = 0.2
+T = 0.5  # change timeout here
 
 
 def send_msg(sock, data):

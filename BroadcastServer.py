@@ -17,7 +17,7 @@ class BroadcastServer:
         discover = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         discover.connect((discover_ip, discover_port))
         print('connected to discover server successfully.')
-        discover_msg = socket.gethostbyname(BROADCAST_HOST) + DELIM_1 + str(BROADCAST_PORT)
+        discover_msg = socket.gethostbyname(socket.gethostname()) + DELIM_1 + str(BROADCAST_PORT)
         send_msg(discover, discover_msg)
         discover.close()
         print('discovered successfully and closed connection.')
