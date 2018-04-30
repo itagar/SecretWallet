@@ -22,7 +22,7 @@ class BroadcastServer:
         discover.close()
         print('discovered successfully and closed connection.')
         self.__welcome = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.__welcome.bind((BROADCAST_HOST, BROADCAST_PORT))
+        self.__welcome.bind((socket.gethostbyname(socket.gethostname()), BROADCAST_PORT))
         print('broadcast welcome socket established.')
         self.__servers = {}
         self.__inputs = []
