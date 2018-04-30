@@ -581,7 +581,7 @@ class Server:
 
 if __name__ == '__main__':
     faulty = False
-    crash = True
+    crash = False
     my_input = input('please insert b for byzantine server or anything else for non-faulty: ')
     if my_input == 'b':
         faulty = True
